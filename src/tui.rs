@@ -1,9 +1,10 @@
 //! Terminal user interface (TUI) setup and management for Rustoria.
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use crossterm::{
-    event::{self, DisableMouseCapture, EnableMouseCapture}, 
+    event::{self, DisableMouseCapture, EnableMouseCapture},
     terminal::{self, EnterAlternateScreen, LeaveAlternateScreen},
+    ExecutableCommand, // Add this import
 };
 use ratatui::{backend::CrosstermBackend, Terminal};
 use std::{io, time::Duration};
@@ -41,6 +42,19 @@ impl Tui {
         crossterm::execute!(io::stdout(), EnterAlternateScreen, EnableMouseCapture)?;
         self.terminal.hide_cursor()?;
         self.terminal.clear()?;
+        self.set_min_size(95, 35)?; // Example: 95x35 minimum size
+        Ok(())
+    }
+
+    /// Sets the minimum terminal size.
+    pub fn set_min_size(&self, width: u16, height: u16) -> Result<()> {
+        let mut stdout = io::stdout();
+        let (current_width, current_height) = terminal::size()?;
+
+        if current_width < width || current_height < height {
+          stdout.execute(crossterm::terminal::SetSize(width, height))?;
+        }
+		
         Ok(())
     }
 
@@ -61,14 +75,11 @@ impl Tui {
     /// Reads the next input event from the terminal with a timeout.
     pub fn next_event(&self) -> Result<Event> {
         let timeout = Duration::from_secs_f64(1.0 / self.framerate);
-        
-        // Use poll with timeout to avoid blocking indefinitely
+
         if event::poll(timeout)? {
-            // If an event is available, read it
             return Ok(Event::Input(event::read()?));
         }
-        
-        // Return a Tick event when no input is available
+
         Ok(Event::Tick)
     }
 }
