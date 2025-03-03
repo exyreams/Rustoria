@@ -21,7 +21,7 @@ pub enum SelectedApp {
 pub enum AppState {
     Init,
     Login,
-    Register, // Add Register state
+    Register,
     Home,
     Running(SelectedApp),
     Quitting,
@@ -33,7 +33,7 @@ pub struct App {
     pub should_quit: bool,
     pub home: Home,
     pub login: Login,
-    pub register: Register, // Add Register component
+    pub register: Register,
 }
 
 impl App {
@@ -44,7 +44,7 @@ impl App {
             should_quit: false,
             home: Home::new(),
             login: Login::new(),
-            register: Register::new(), // Initialize Register
+            register: Register::new(),
         }
     }
 
@@ -85,14 +85,16 @@ impl App {
                                         return Ok(());
                                     }
                                     SelectedApp::None => {
-                                        // Check credentials
+                                        // Check credentials and get user ID
                                         let credentials = Credentials {
                                             username: self.login.username.clone(),
                                             password: self.login.password.clone(),
                                         };
 
                                         match login(credentials) {
-                                            Ok(_) => {
+                                            Ok(user_id) => {
+                                                // Load username after successful login
+                                                self.home.load_username(user_id)?; // This will now work
                                                 self.state = AppState::Home;
                                             }
                                             Err(err) => {
@@ -132,8 +134,8 @@ impl App {
 
                     AppState::Home => {
                         if let crossterm::event::Event::Key(key) = event {
-                            match self.home.handle_input(key)? {
-                                Some(selected_app) => match selected_app {
+                            if let Some(selected_app) = self.home.handle_input(key)? {
+                                match selected_app {
                                     SelectedApp::Hospital | SelectedApp::Pharmacy => {
                                         self.state = AppState::Running(selected_app);
                                     }
@@ -141,9 +143,11 @@ impl App {
                                         self.should_quit = true;
                                         return Ok(());
                                     }
-                                    SelectedApp::None => {}
-                                },
-                                None => {}
+                                    SelectedApp::None => {
+                                        // Back to login
+                                        self.state = AppState::Login;
+                                    }
+                                }
                             }
                         }
                     }
@@ -178,6 +182,9 @@ impl App {
             tui::Event::Tick => {
                 if let AppState::Login = self.state {
                     self.login.check_error_timeout();
+                }
+                if let AppState::Register = self.state {
+                    self.register.check_error_timeout();
                 }
             }
         }
