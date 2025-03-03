@@ -72,6 +72,10 @@ impl Register {
                 // Return true to signal registration attempt (if not back).
                 return Ok(true);
             }
+            KeyCode::Esc => {
+                // ESC key pressed - go back to login
+                return Ok(true); // Return true to signal we want to go back
+            }
             _ => {}
         }
         Ok(false)
@@ -99,13 +103,34 @@ impl Register {
     }
 }
 
+/// Helper function to create a centered rect using up certain percentage of the available rect
+fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
+    let popup_layout = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Percentage((100 - percent_y) / 2),
+            Constraint::Percentage(percent_y),
+            Constraint::Percentage((100 - percent_y) / 2),
+        ])
+        .split(r);
+
+    Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([
+            Constraint::Percentage((100 - percent_x) / 2),
+            Constraint::Percentage(percent_x),
+            Constraint::Percentage((100 - percent_x) / 2),
+        ])
+        .split(popup_layout[1])[1]
+}
+
 impl Component for Register {
     fn handle_input(&mut self, event: KeyEvent) -> Result<Option<crate::app::SelectedApp>> {
         self.check_error_timeout(); // Check for timeout
 
         // Handle input and return early if it's the "Back" button.
         if self.handle_register_input(event)? {
-            if self.focus_index == 3 {
+            if self.focus_index == 3 || event.code == KeyCode::Esc {
                 return Ok(Some(SelectedApp::None)); // Back to login
             } else {
                 // Validate fields *before* database call
@@ -149,7 +174,7 @@ impl Component for Register {
             .direction(Direction::Vertical)
             .constraints(
                 [
-                    Constraint::Length(3), // Title
+                    Constraint::Length(1), // Title
                     Constraint::Length(1), // Spacing
                     Constraint::Length(3), // Username
                     Constraint::Length(1), // Username error
@@ -159,6 +184,8 @@ impl Component for Register {
                     Constraint::Length(1), // Confirm Password error
                     Constraint::Length(2), //  Spacing
                     Constraint::Length(1), // Back to Login text
+                    Constraint::Length(2), // Spacing before help text
+                    Constraint::Length(1), // Help text
                     Constraint::Min(0),    // Remaining space
                 ]
                 .as_ref(),
@@ -170,7 +197,7 @@ impl Component for Register {
         let title = Paragraph::new("Create Account")
             .style(
                 Style::default()
-                    .fg(Color::Cyan)
+                    .fg(Color::White)
                     .add_modifier(Modifier::BOLD),
             )
             .alignment(Alignment::Center);
@@ -190,15 +217,13 @@ impl Component for Register {
             } else {
                 Color::White
             }));
-        let username_input = Paragraph::new(self.username.clone()).block(username_block);
-        frame.render_widget(
-            username_input,
-            vertical_layout[2].inner(Margin {
-                vertical: 0,
-                horizontal: 1,
-            }),
-        );
-        // --- Username Error (if any, and specific to username) ---
+
+        // Create a narrower area for the username field (60% of width, centered)
+        let username_area = centered_rect(60, 100, vertical_layout[2]);
+        let username_input = Paragraph::new(self.username.clone())
+            .block(username_block)
+            .alignment(Alignment::Left);
+        frame.render_widget(username_input, username_area);
 
         // --- Password ---
         let password_block = Block::default()
@@ -214,14 +239,13 @@ impl Component for Register {
             } else {
                 Color::White
             }));
-        let password_input = Paragraph::new("•".repeat(self.password.len())).block(password_block);
-        frame.render_widget(
-            password_input,
-            vertical_layout[4].inner(Margin {
-                vertical: 0,
-                horizontal: 1,
-            }),
-        );
+
+        // Create a narrower area for the password field (60% of width, centered)
+        let password_area = centered_rect(60, 100, vertical_layout[4]);
+        let password_input = Paragraph::new("•".repeat(self.password.len()))
+            .block(password_block)
+            .alignment(Alignment::Left);
+        frame.render_widget(password_input, password_area);
 
         // --- Confirm Password ---
         let confirm_password_block = Block::default()
@@ -237,15 +261,13 @@ impl Component for Register {
             } else {
                 Color::White
             }));
-        let confirm_password_input =
-            Paragraph::new("•".repeat(self.confirm_password.len())).block(confirm_password_block);
-        frame.render_widget(
-            confirm_password_input,
-            vertical_layout[6].inner(Margin {
-                vertical: 0,
-                horizontal: 1,
-            }),
-        );
+
+        // Create a narrower area for the confirm password field (60% of width, centered)
+        let confirm_password_area = centered_rect(60, 100, vertical_layout[6]);
+        let confirm_password_input = Paragraph::new("•".repeat(self.confirm_password.len()))
+            .block(confirm_password_block)
+            .alignment(Alignment::Left);
+        frame.render_widget(confirm_password_input, confirm_password_area);
 
         // --- Error Message (if any) ---
         if let Some(error) = &self.error_message {
@@ -257,7 +279,11 @@ impl Component for Register {
 
         // --- Back to Login Text ---
         let back_to_login_text = Paragraph::new(Span::styled(
-            "◀ Back to Login",
+            if self.focus_index == 3 {
+                "◀ Back to Login"
+            } else {
+                "  Back to Login"
+            },
             Style::default()
                 .fg(if self.focus_index == 3 {
                     Color::Cyan
@@ -268,5 +294,13 @@ impl Component for Register {
         ))
         .alignment(Alignment::Center);
         frame.render_widget(back_to_login_text, vertical_layout[9]);
+
+        // --- Help Text ---
+        let help_text = Paragraph::new(vec![Line::from(Span::styled(
+            "TAB/Arrow Keys: Navigate | ENTER: Select | ESC: Back to Login",
+            Style::default().fg(Color::DarkGray),
+        ))])
+        .alignment(Alignment::Center);
+        frame.render_widget(help_text, vertical_layout[11]);
     }
 }
