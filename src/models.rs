@@ -23,5 +23,3 @@ pub struct Drug {
     pub stock: u32,
     // Add other relevant fields, e.g., supplier, expiry date, etc.
 }
-
-// Add other data structures as needed for your application.

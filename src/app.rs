@@ -2,7 +2,6 @@
 
 use crate::auth::{login, Credentials};
 use crate::components::{home::Home, login::Login, register::Register, Component};
-use crate::db;
 use crate::tui::{self, Tui};
 use anyhow::Result;
 use crossterm::event::{KeyCode, KeyEvent};
@@ -24,6 +23,7 @@ pub enum AppState {
     Register,
     Home,
     Running(SelectedApp),
+    #[allow(dead_code)]
     Quitting,
 }
 
@@ -114,7 +114,7 @@ impl App {
                     // Register State
                     AppState::Register => {
                         if let crossterm::event::Event::Key(key) = event {
-                            if let Some(selected_app) = self.register.handle_input(key)? {
+                            if let Some(_selected_app) = self.register.handle_input(key)? {
                                 // When SelectedApp::None is returned from Register, go back to Login
                                 // This happens both with "Back to Login" and successful registration
                                 self.state = AppState::Login;

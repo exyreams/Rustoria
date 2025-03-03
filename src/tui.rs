@@ -1,6 +1,6 @@
 //! Terminal user interface (TUI) setup and management for Rustoria.
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture},
     terminal::{self, EnterAlternateScreen, LeaveAlternateScreen},
@@ -52,9 +52,9 @@ impl Tui {
         let (current_width, current_height) = terminal::size()?;
 
         if current_width < width || current_height < height {
-          stdout.execute(crossterm::terminal::SetSize(width, height))?;
+            stdout.execute(crossterm::terminal::SetSize(width, height))?;
         }
-		
+
         Ok(())
     }
 

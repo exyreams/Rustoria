@@ -19,6 +19,7 @@ pub struct Login {
     /// The password input field.
     pub password: String,
     /// Flag that indicates whether the username input is active
+    #[allow(dead_code)]
     pub focus_username: bool,
     /// Optional error message to display.
     pub error_message: Option<String>,

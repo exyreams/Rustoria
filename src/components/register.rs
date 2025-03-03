@@ -7,7 +7,7 @@ use anyhow::Result;
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
     prelude::*,
-    widgets::{Block, BorderType, Borders, Clear, Paragraph},
+    widgets::{Block, BorderType, Borders, Paragraph},
 };
 use std::time::{Duration, Instant};
 
