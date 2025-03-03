@@ -37,7 +37,7 @@ impl Register {
     }
 
     fn handle_register_input(&mut self, key: KeyEvent) -> Result<bool> {
-         match key.code {
+        match key.code {
             KeyCode::Char(c) => {
                 match self.focus_index {
                     0 => self.username.push(c),
@@ -53,7 +53,7 @@ impl Register {
                     0 => self.username.pop(),
                     1 => self.password.pop(),
                     2 => self.confirm_password.pop(),
-                    _ => None
+                    _ => None,
                 };
                 self.clear_error_message();
                 self.registration_success = false;
@@ -144,23 +144,22 @@ impl Component for Register {
         Ok(None)
     }
 
-
     fn render(&self, frame: &mut Frame) {
         let vertical_layout = Layout::default()
             .direction(Direction::Vertical)
             .constraints(
                 [
-                    Constraint::Length(3),     // Title
-                    Constraint::Length(1),     // Spacing
-                    Constraint::Length(3),     // Username
-                    Constraint::Length(1),     // Username error
-                    Constraint::Length(3),     // Password
-                    Constraint::Length(1),     // Password error
-                    Constraint::Length(3),     // Confirm Password
-                    Constraint::Length(1),     // Confirm Password error
-                    Constraint::Length(2),    //  Spacing
-                    Constraint::Length(1),     // Back to Login text
-                    Constraint::Min(0),       // Remaining space
+                    Constraint::Length(3), // Title
+                    Constraint::Length(1), // Spacing
+                    Constraint::Length(3), // Username
+                    Constraint::Length(1), // Username error
+                    Constraint::Length(3), // Password
+                    Constraint::Length(1), // Password error
+                    Constraint::Length(3), // Confirm Password
+                    Constraint::Length(1), // Confirm Password error
+                    Constraint::Length(2), //  Spacing
+                    Constraint::Length(1), // Back to Login text
+                    Constraint::Min(0),    // Remaining space
                 ]
                 .as_ref(),
             )
@@ -169,7 +168,11 @@ impl Component for Register {
 
         // --- Title ---
         let title = Paragraph::new("Create Account")
-            .style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))
+            .style(
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            )
             .alignment(Alignment::Center);
         frame.render_widget(title, vertical_layout[0]);
 
@@ -177,14 +180,16 @@ impl Component for Register {
         let username_block = Block::default()
             .borders(Borders::ALL)
             .border_type(BorderType::Rounded)
-            .title(if self.focus_index == 0 { " Username " } else { " Username " })
-            .style(
-                Style::default().fg(if self.focus_index == 0 {
-                    Color::Cyan
-                } else {
-                    Color::White
-                }),
-            );
+            .title(if self.focus_index == 0 {
+                " Username "
+            } else {
+                " Username "
+            })
+            .style(Style::default().fg(if self.focus_index == 0 {
+                Color::Cyan
+            } else {
+                Color::White
+            }));
         let username_input = Paragraph::new(self.username.clone()).block(username_block);
         frame.render_widget(
             username_input,
@@ -195,19 +200,20 @@ impl Component for Register {
         );
         // --- Username Error (if any, and specific to username) ---
 
-
         // --- Password ---
         let password_block = Block::default()
             .borders(Borders::ALL)
             .border_type(BorderType::Rounded)
-            .title(if self.focus_index == 1 { " Password " } else { " Password " })
-            .style(
-                Style::default().fg(if self.focus_index == 1 {
-                    Color::Cyan
-                } else {
-                    Color::White
-                }),
-            );
+            .title(if self.focus_index == 1 {
+                " Password "
+            } else {
+                " Password "
+            })
+            .style(Style::default().fg(if self.focus_index == 1 {
+                Color::Cyan
+            } else {
+                Color::White
+            }));
         let password_input = Paragraph::new("•".repeat(self.password.len())).block(password_block);
         frame.render_widget(
             password_input,
@@ -216,27 +222,21 @@ impl Component for Register {
                 horizontal: 1,
             }),
         );
-       // --- Password Error (if any, and specific to password) ---
-
 
         // --- Confirm Password ---
         let confirm_password_block = Block::default()
             .borders(Borders::ALL)
             .border_type(BorderType::Rounded)
-            .title(
-                if self.focus_index == 2 {
-                    " Confirm Password "
-                } else {
-                    " Confirm Password "
-                },
-            )
-            .style(
-                Style::default().fg(if self.focus_index == 2 {
-                    Color::Cyan
-                } else {
-                    Color::White
-                }),
-            );
+            .title(if self.focus_index == 2 {
+                " Confirm Password "
+            } else {
+                " Confirm Password "
+            })
+            .style(Style::default().fg(if self.focus_index == 2 {
+                Color::Cyan
+            } else {
+                Color::White
+            }));
         let confirm_password_input =
             Paragraph::new("•".repeat(self.confirm_password.len())).block(confirm_password_block);
         frame.render_widget(
@@ -255,10 +255,9 @@ impl Component for Register {
             frame.render_widget(error_paragraph, vertical_layout[7]); //  Below confirm password
         }
 
-
         // --- Back to Login Text ---
         let back_to_login_text = Paragraph::new(Span::styled(
-            "Back to Login",
+            "◀ Back to Login",
             Style::default()
                 .fg(if self.focus_index == 3 {
                     Color::Cyan
