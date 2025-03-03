@@ -7,6 +7,7 @@ use crossterm::event::KeyEvent;
 // Re-export the components for easier access
 pub mod home;
 pub mod login;
+pub mod register;
 
 /// A trait for UI components that can be rendered and handle input events.
 pub trait Component {

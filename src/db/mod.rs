@@ -37,19 +37,34 @@ pub fn init_db() -> Result<()> {
     Ok(())
 }
 
-/// Authenticates a user against the database (no changes here).
+/// Authenticates a user against the database.
 pub fn authenticate_user(username: &str, password: &str) -> Result<i64> {
     let db_path = Path::new(DB_NAME);
     let conn = Connection::open(db_path)?;
 
     let mut stmt = conn.prepare("SELECT id, password_hash FROM users WHERE username = ?")?;
-    let (user_id, stored_hash): (i64, String) = stmt.query_row(params![username], |row| {
-        Ok((row.get(0)?, row.get(1)?))
-    })?;
+    let (user_id, stored_hash): (i64, String) =
+        stmt.query_row(params![username], |row| Ok((row.get(0)?, row.get(1)?)))?;
 
     if verify(password, &stored_hash).context("Failed to verify password")? {
         Ok(user_id)
     } else {
         Err(anyhow::anyhow!("Invalid credentials"))
     }
+}
+
+/// Creates a new user in the database.
+pub fn create_user(username: &str, password: &str) -> Result<()> {
+    let db_path = Path::new(DB_NAME);
+    let conn = Connection::open(db_path)?;
+
+    // Hash the password *before* storing it!
+    let hashed_password = hash(password, DEFAULT_COST).context("Failed to hash password")?;
+
+    conn.execute(
+        "INSERT INTO users (username, password_hash) VALUES (?, ?)",
+        params![username, hashed_password], // Use the *hashed* password
+    )?;
+
+    Ok(())
 }
