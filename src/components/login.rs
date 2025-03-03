@@ -23,7 +23,7 @@ pub struct Login {
     /// Optional error message to display.
     pub error_message: Option<String>,
     /// New field for success messages
-    pub success_message: Option<String>, 
+    pub success_message: Option<String>,
     /// Current selection in the login screen (0: Username, 1: Password, 2: Exit, 3: Create Account)
     pub selected_index: usize,
     /// Flag to indicate if the exit confirmation dialog is open
@@ -49,7 +49,7 @@ impl Login {
         }
     }
 
-   /// Handles exit dialog input separately
+    /// Handles exit dialog input separately
     fn handle_exit_dialog_input(&mut self, key: KeyEvent) -> Result<bool> {
         match key.code {
             KeyCode::Left | KeyCode::Right => {
@@ -90,11 +90,11 @@ impl Login {
                 self.clear_error_message();
             }
             KeyCode::Tab | KeyCode::Down => {
-                 // 0: Username, 1: Password, 2: Create Account, 3: Exit
+                // 0: Username, 1: Password, 2: Create Account, 3: Exit
                 self.selected_index = (self.selected_index + 1) % 4;
             }
             KeyCode::Up => {
-               // 0: Username, 1: Password, 2: Create Account, 3: Exit
+                // 0: Username, 1: Password, 2: Create Account, 3: Exit
                 self.selected_index = (self.selected_index + 3) % 4;
             }
             KeyCode::Enter => {
@@ -103,7 +103,7 @@ impl Login {
                         // Check for empty fields before signaling login attempt
                         if self.username.is_empty() {
                             self.set_error_message("Username cannot be empty.".to_string());
-                            return Ok(false)
+                            return Ok(false);
                         }
 
                         if self.password.is_empty() {
@@ -111,12 +111,12 @@ impl Login {
                             return Ok(false);
                         }
 
-                        return Ok(true);  // Signal login attempt
+                        return Ok(true); // Signal login attempt
                     }
                     2 => {
                         // User selected "Create Account"
                         return Ok(true);
-                    },
+                    }
                     3 => {
                         // Exit
                         self.show_exit_dialog = true;
@@ -174,7 +174,7 @@ impl Login {
                 self.clear_error_message();
             }
         }
-        
+
         // Add success message timeout check
         if let Some(time) = self.success_message_time {
             if time.elapsed() >= Duration::from_secs(5) {
@@ -184,9 +184,30 @@ impl Login {
     }
 }
 
+/// Helper function to create a centered rect using up certain percentage of the available rect
+fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
+    let popup_layout = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Percentage((100 - percent_y) / 2),
+            Constraint::Percentage(percent_y),
+            Constraint::Percentage((100 - percent_y) / 2),
+        ])
+        .split(r);
+
+    Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([
+            Constraint::Percentage((100 - percent_x) / 2),
+            Constraint::Percentage(percent_x),
+            Constraint::Percentage((100 - percent_x) / 2),
+        ])
+        .split(popup_layout[1])[1]
+}
+
 impl Component for Login {
-      fn handle_input(&mut self, event: KeyEvent) -> Result<Option<crate::app::SelectedApp>> {
-        self.check_error_timeout();
+    fn handle_input(&mut self, event: KeyEvent) -> Result<Option<crate::app::SelectedApp>> {
+        self.check_message_timeouts();
 
         if self.show_exit_dialog {
             // If dialog is showing, *only* handle dialog input.
@@ -211,19 +232,21 @@ impl Component for Login {
             .direction(Direction::Vertical)
             .constraints(
                 [
-                    Constraint::Length(7),     // Title
-                    Constraint::Length(1),     // Slogan
-                    Constraint::Length(2),     // Spacing
-                    Constraint::Length(1),     // "Login to Rustoria"
-                    Constraint::Length(1),     // spacing
-                    Constraint::Length(3),     // Username
-                    Constraint::Length(3),     // Password
-                    Constraint::Length(3),     // Centered error message
-                    Constraint::Length(1),     // Spacing before options
-                    Constraint::Length(1),     // Create Account text
-                    Constraint::Length(2),     // Double spacing before "Exit"
-                    Constraint::Length(1),     // Exit text
-                    Constraint::Min(0),       // Remaining space
+                    Constraint::Length(7), // 0: Title
+                    Constraint::Length(1), // 1: Slogan
+                    Constraint::Length(2), // 2: Spacing
+                    Constraint::Length(1), // 3: "Login to Rustoria"
+                    Constraint::Length(1), // 4: spacing
+                    Constraint::Length(3), // 5: Username
+                    Constraint::Length(3), // 6: Password
+                    Constraint::Length(2), // 7: Error message
+                    Constraint::Length(1), // 8: Spacing before options
+                    Constraint::Length(2), // 9: Create Account text
+                    Constraint::Length(1), // 10: Spacing before "Exit"
+                    Constraint::Length(1), // 11: Exit text
+                    Constraint::Length(3), // 12: Spacing between Exit and Help
+                    Constraint::Length(1), // 13: Help text
+                    Constraint::Min(0),    // 14: Remaining space
                 ]
                 .as_ref(),
             )
@@ -232,32 +255,19 @@ impl Component for Login {
 
         // --- Title ---
         let title = Paragraph::new(Text::from(vec![
-            Line::from(
-                "██████╗░██╗░░░██╗░██████╗████████╗░█████╗░██████╗░██╗░█████╗░".to_string(),
-            ),
-            Line::from(
-                "██╔══██╗██║░░░██║██╔════╝╚══██╔══╝██╔══██╗██╔══██╗██║██╔══██╗".to_string(),
-            ),
-            Line::from(
-                "██████╔╝██║░░░██║╚█████╗░░░░██║░░░██║░░██║██████╔╝██║███████║".to_string(),
-            ),
-            Line::from(
-                "██╔══██╗██║░░░██║░╚═══██╗░░░██║░░░██║░░██║██╔══██╗██║██╔══██║".to_string(),
-            ),
-            Line::from(
-                "██║░░██║╚██████╔╝██████╔╝░░░██║░░░╚█████╔╝██║░░██║██║██║░░██║".to_string(),
-            ),
-            Line::from(
-                "╚═╝░░╚═╝░╚═════╝░╚═════╝░░░░╚═╝░░░░╚════╝░╚═╝░░╚═╝╚═╝╚═╝░░╚═╝".to_string(),
-            ),
+            Line::from("██████╗░██╗░░░██╗░██████╗████████╗░█████╗░██████╗░██╗░█████╗░".to_string()),
+            Line::from("██╔══██╗██║░░░██║██╔════╝╚══██╔══╝██╔══██╗██╔══██╗██║██╔══██╗".to_string()),
+            Line::from("██████╔╝██║░░░██║╚█████╗░░░░██║░░░██║░░██║██████╔╝██║███████║".to_string()),
+            Line::from("██╔══██╗██║░░░██║░╚═══██╗░░░██║░░░██║░░██║██╔══██╗██║██╔══██║".to_string()),
+            Line::from("██║░░██║╚██████╔╝██████╔╝░░░██║░░░╚█████╔╝██║░░██║██║██║░░██║".to_string()),
+            Line::from("╚═╝░░╚═╝░╚═════╝░╚═════╝░░░░╚═╝░░░░╚════╝░╚═╝░░╚═╝╚═╝╚═╝░░╚═╝".to_string()),
         ]))
         .alignment(Alignment::Center)
         .style(Style::default().fg(Color::Cyan));
         frame.render_widget(title, vertical_layout[0]);
 
         // --- Slogan ---
-        let title_block = Block::default()
-            .borders(Borders::NONE);
+        let title_block = Block::default().borders(Borders::NONE);
         let title = Paragraph::new(Text::from(vec![
             Line::from(Span::styled(
                 "Seamless Hospital & Pharmacy Operations",
@@ -290,18 +300,15 @@ impl Component for Login {
             .borders(Borders::ALL)
             .border_type(BorderType::Rounded)
             .title(if self.selected_index == 0 {
-                " Username (press `TAB` or `Arrow Keys` to switch) "
+                " Username "
             } else {
-                " Username (press `TAB` or `Arrow Keys` to switch) "
+                " Username "
             })
-            .style(
-                Style::default()
-                    .fg(if self.selected_index == 0 {
-                        Color::Cyan
-                    } else {
-                        Color::White
-                    }),
-            );
+            .style(Style::default().fg(if self.selected_index == 0 {
+                Color::Cyan
+            } else {
+                Color::White
+            }));
 
         let username_input = Paragraph::new(self.username.clone()).block(username_block);
         frame.render_widget(
@@ -317,18 +324,15 @@ impl Component for Login {
             .borders(Borders::ALL)
             .border_type(BorderType::Rounded)
             .title(if self.selected_index == 1 {
-                " Password (press `TAB` or `Arrow Keys` to switch) "
+                " Password "
             } else {
-                " Password (press `TAB` or `Arrow Keys` to switch) "
+                " Password "
             })
-            .style(
-                Style::default()
-                    .fg(if self.selected_index == 1 {
-                        Color::Cyan
-                    } else {
-                        Color::White
-                    }),
-            );
+            .style(Style::default().fg(if self.selected_index == 1 {
+                Color::Cyan
+            } else {
+                Color::White
+            }));
         let password_input = Paragraph::new("•".repeat(self.password.len())).block(password_block);
         frame.render_widget(
             password_input,
@@ -338,114 +342,140 @@ impl Component for Login {
             }),
         );
 
-        // --- Error Message (if any) ---
+        // --- Error Message ---
         if let Some(error) = &self.error_message {
-            let error_paragraph = Paragraph::new(error.as_str())
-                .style(Style::default().fg(Color::Red))
-                .alignment(Alignment::Center);
-            frame.render_widget(error_paragraph, vertical_layout[7]);
+            let error_message = Paragraph::new(Span::styled(
+                error,
+                Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+            ))
+            .alignment(Alignment::Center);
+            frame.render_widget(error_message, vertical_layout[7]);
+        } else if let Some(success) = &self.success_message {
+            let success_message = Paragraph::new(Span::styled(
+                success,
+                Style::default()
+                    .fg(Color::Green)
+                    .add_modifier(Modifier::BOLD),
+            ))
+            .alignment(Alignment::Center);
+            frame.render_widget(success_message, vertical_layout[7]);
         }
 
-        // --- Success Message (if any) ---
-        if let Some(success) = &self.success_message {
-            let success_paragraph = Paragraph::new(success.as_str())
-                .style(Style::default().fg(Color::Green))
-                .alignment(Alignment::Center);
-            frame.render_widget(success_paragraph, vertical_layout[7]);
-        } else if let Some(error) = &self.error_message {
-            let error_paragraph = Paragraph::new(error.as_str())
-                .style(Style::default().fg(Color::Red))
-                .alignment(Alignment::Center);
-            frame.render_widget(error_paragraph, vertical_layout[7]);
-        }
-
- // --- Create Account Text ---
+        // --- Create Account ---
         let create_account_text = Paragraph::new(Span::styled(
-            "Create Account",
-            Style::default()
-                .fg(if self.selected_index == 2 {
-                    Color::Cyan // Use Cyan for consistency
-                } else {
-                    Color::Gray
-                })
-                .add_modifier(Modifier::BOLD),
+            if self.selected_index == 2 {
+                "► Create Account"
+            } else {
+                "  Create Account"
+            },
+            Style::default().fg(if self.selected_index == 2 {
+                Color::Cyan
+            } else {
+                Color::White
+            }),
         ))
         .alignment(Alignment::Center);
         frame.render_widget(create_account_text, vertical_layout[9]);
 
-        // --- Exit Text ---
+        // --- Exit ---
         let exit_text = Paragraph::new(Span::styled(
-            "Exit",
-            Style::default()
-                .fg(if self.selected_index == 3 {
-                    Color::Cyan // Use Cyan for consistency
-                } else {
-                    Color::Gray
-                })
-                .add_modifier(Modifier::BOLD),
+            if self.selected_index == 3 {
+                "► Exit"
+            } else {
+                "  Exit"
+            },
+            Style::default().fg(if self.selected_index == 3 {
+                Color::Cyan
+            } else {
+                Color::White
+            }),
         ))
         .alignment(Alignment::Center);
         frame.render_widget(exit_text, vertical_layout[11]);
 
-        // --- Exit Confirmation Dialog ---
+        // --- Help Text ---
+        let help_text = Paragraph::new(vec![Line::from(Span::styled(
+            "TAB/Arrow Keys: Navigate | ENTER: Select | ESC: Toggle Exit Dialog",
+            Style::default().fg(Color::DarkGray),
+        ))])
+        .alignment(Alignment::Center);
+        frame.render_widget(help_text, vertical_layout[13]);
+
+        // --- Exit Dialog ---
         if self.show_exit_dialog {
-            let dialog_area = centered_rect(60, 20, frame.area());
+            let dialog_width = 40;
+            let dialog_height = 8;
+
+            let dialog_area = Rect::new(
+                (frame.area().width.saturating_sub(dialog_width)) / 2,
+                (frame.area().height.saturating_sub(dialog_height)) / 2,
+                dialog_width,
+                dialog_height,
+            );
+
+            // Clear the background
+            frame.render_widget(Clear, dialog_area);
+
+            // Render dialog box
             let dialog_block = Block::default()
-                .title("Confirm Exit")
+                .title(" Confirm Exit ")
+                .add_modifier(Modifier::BOLD)
+                .title_style(Style::default().fg(Color::Cyan))
                 .borders(Borders::ALL)
-                .border_type(BorderType::Rounded);
+                .border_type(BorderType::Rounded)
+                .border_style(Style::default().fg(Color::Cyan));
 
-            let text = vec![
-                Line::from("Are you sure you want to quit?"),
-                Line::from(""),
-                Line::from(vec![
-                    Span::styled(
-                        " Yes ",
-                         Style::default().fg(if self.exit_dialog_selected == 0 {
-                            Color::Green
-                        } else {
-                            Color::DarkGray
-                        }),
-                    ),
-                    Span::raw("  "),
-                    Span::styled(
-                        " No ",
-                        Style::default().fg(if self.exit_dialog_selected == 1 {
-                            Color::Red
-                        } else {
-                            Color::DarkGray
-                        }),
-                    ),
-                ]),
-            ];
+            frame.render_widget(dialog_block.clone(), dialog_area);
 
-            let dialog_paragraph = Paragraph::new(text)
-                .block(dialog_block)
+            // Dialog content
+            let inner_area = dialog_block.inner(dialog_area);
+
+            let content_layout = Layout::default()
+                .direction(Direction::Vertical)
+                .margin(1)
+                .constraints([
+                    Constraint::Length(2), // Message
+                    Constraint::Length(2), // Buttons
+                ])
+                .split(inner_area);
+
+            let message = Paragraph::new("Are you sure you want to exit?")
+                .style(Style::default().fg(Color::White))
+                .add_modifier(Modifier::BOLD)
                 .alignment(Alignment::Center);
 
-            frame.render_widget(Clear, dialog_area);
-            frame.render_widget(dialog_paragraph, dialog_area);
+            frame.render_widget(message, content_layout[0]);
+
+            // Buttons
+            let buttons_layout = Layout::default()
+                .direction(Direction::Horizontal)
+                .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
+                .split(content_layout[1]);
+
+            let yes_style = if self.exit_dialog_selected == 0 {
+                Style::default()
+                    .fg(Color::Green)
+                    .add_modifier(Modifier::BOLD)
+            } else {
+                Style::default().fg(Color::Gray)
+            };
+
+            let no_style = if self.exit_dialog_selected == 1 {
+                Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)
+            } else {
+                Style::default().fg(Color::Gray)
+            };
+
+            let yes_button = Paragraph::new("Yes")
+                .style(yes_style)
+                .alignment(Alignment::Center);
+
+            let no_button = Paragraph::new("No")
+                .style(no_style)
+                .alignment(Alignment::Center);
+
+            frame.render_widget(yes_button, buttons_layout[0]);
+            frame.render_widget(no_button, buttons_layout[1]);
         }
     }
-}
-
-/// Helper function to create a centered rectangle.
-fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
-    let popup_layout = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Percentage((100 - percent_y) / 2),
-            Constraint::Percentage(percent_y),
-            Constraint::Percentage((100 - percent_y) / 2),
-        ])
-        .split(r);
-
-    Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([
-            Constraint::Percentage((100 - percent_x) / 2),
-            Constraint::Percentage(percent_x),
-            Constraint::Percentage((100 - percent_x) / 2),
-        ])
-        .split(popup_layout[1])[1]
 }
