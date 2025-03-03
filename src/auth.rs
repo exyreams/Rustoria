@@ -21,8 +21,7 @@ pub struct Credentials {
 ///
 /// A `Result` indicating success or failure.  Returns `Ok(())` if
 /// the credentials are valid, otherwise returns an error.
-pub fn login(credentials: Credentials) -> Result<()> {
+pub fn login(credentials: Credentials) -> Result<i64> {
     db::authenticate_user(&credentials.username, &credentials.password)
-        .map(|_| ()) // Convert user ID to unit type on success
         .context("Authentication failed")
 }

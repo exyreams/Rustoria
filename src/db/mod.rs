@@ -68,3 +68,14 @@ pub fn create_user(username: &str, password: &str) -> Result<()> {
 
     Ok(())
 }
+
+/// Retrieves a username from the database given a user ID.
+pub fn get_username(user_id: i64) -> Result<String> {
+    let db_path = Path::new(DB_NAME);
+    let conn = Connection::open(db_path)?;
+
+    let mut stmt = conn.prepare("SELECT username FROM users WHERE id = ?")?;
+    let username: String = stmt.query_row(params![user_id], |row| row.get(0))?;
+
+    Ok(username)
+}
