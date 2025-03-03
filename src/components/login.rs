@@ -310,14 +310,12 @@ impl Component for Login {
                 Color::White
             }));
 
-        let username_input = Paragraph::new(self.username.clone()).block(username_block);
-        frame.render_widget(
-            username_input,
-            vertical_layout[5].inner(Margin {
-                vertical: 0,
-                horizontal: 1,
-            }),
-        );
+        // Create a narrower area for the username field (60% of width, centered)
+        let username_area = centered_rect(60, 100, vertical_layout[5]);
+        let username_input = Paragraph::new(self.username.clone())
+            .block(username_block)
+            .alignment(Alignment::Left);
+        frame.render_widget(username_input, username_area);
 
         // --- Password ---
         let password_block = Block::default()
@@ -333,14 +331,13 @@ impl Component for Login {
             } else {
                 Color::White
             }));
-        let password_input = Paragraph::new("•".repeat(self.password.len())).block(password_block);
-        frame.render_widget(
-            password_input,
-            vertical_layout[6].inner(Margin {
-                vertical: 0,
-                horizontal: 1,
-            }),
-        );
+
+        // Create a narrower area for the password field (60% of width, centered)
+        let password_area = centered_rect(60, 100, vertical_layout[6]);
+        let password_input = Paragraph::new("•".repeat(self.password.len()))
+            .block(password_block)
+            .alignment(Alignment::Left);
+        frame.render_widget(password_input, password_area);
 
         // --- Error Message ---
         if let Some(error) = &self.error_message {
