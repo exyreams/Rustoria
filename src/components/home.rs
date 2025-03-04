@@ -164,6 +164,12 @@ impl Component for Home {
     }
 
     fn render(&self, frame: &mut Frame) {
+        //  Apply global black background:
+        frame.render_widget(
+            Block::default().style(Style::default().bg(Color::Black)),
+            frame.area(),
+        );
+
         let area = frame.area();
 
         // Main vertical layout
@@ -340,9 +346,9 @@ impl Component for Home {
 
         // Logout link
         let back_text = if self.selection_mode == 1 {
-            "◀ Logout"
+            "► Logout ◄"
         } else {
-            "Logout"
+            "  Logout  "
         };
 
         let back_style = if self.selection_mode == 1 {
@@ -395,10 +401,11 @@ impl Home {
         let dialog_block = Block::default()
             .title(" Confirm Logout ")
             .add_modifier(Modifier::BOLD)
-            .title_style(Style::default().fg(Color::LightBlue))
+            .title_style(Style::default().fg(Color::Black))
             .borders(Borders::ALL)
-            .border_type(BorderType::Rounded)
-            .border_style(Style::default().fg(Color::LightBlue));
+            .border_type(BorderType::Thick)
+            .border_style(Style::default().fg(Color::Black))
+            .style(Style::default().bg(Color::LightCyan));
 
         frame.render_widget(dialog_block.clone(), dialog_area);
 
@@ -415,7 +422,7 @@ impl Home {
             .split(inner_area);
 
         let message = Paragraph::new("Are you sure you want to logout?")
-            .style(Style::default().fg(Color::White))
+            .style(Style::default().fg(Color::Black))
             .add_modifier(Modifier::BOLD)
             .alignment(Alignment::Center);
 
@@ -432,20 +439,32 @@ impl Home {
                 .fg(Color::Green)
                 .add_modifier(Modifier::BOLD)
         } else {
-            Style::default().fg(Color::Gray)
+            Style::default().fg(Color::Black)
         };
 
         let no_style = if self.logout_dialog_selected == 1 {
             Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)
         } else {
-            Style::default().fg(Color::Gray)
+            Style::default().fg(Color::Black)
         };
 
-        let yes_button = Paragraph::new("Yes")
+        let yes_text = if self.logout_dialog_selected == 0 {
+            "► Yes ◄"
+        } else {
+            "  Yes  "
+        };
+
+        let no_text = if self.logout_dialog_selected == 1 {
+            "► No ◄"
+        } else {
+            "  No  "
+        };
+
+        let yes_button = Paragraph::new(yes_text)
             .style(yes_style)
             .alignment(Alignment::Center);
 
-        let no_button = Paragraph::new("No")
+        let no_button = Paragraph::new(no_text)
             .style(no_style)
             .alignment(Alignment::Center);
 

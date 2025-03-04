@@ -69,6 +69,7 @@ impl Register {
                     // Back to Login selected
                     return Ok(true);
                 }
+                //  Removed extra `return Ok(true);` -  Unnecessary, handled below
                 // Return true to signal registration attempt (if not back).
                 return Ok(true);
             }
@@ -162,6 +163,8 @@ impl Component for Register {
                     Err(err) => {
                         // Display error message
                         self.set_error_message(format!("{}", err));
+                        //  Crucially, we now `return Ok(None)` after setting the error.
+                        return Ok(None);
                     }
                 }
             }
@@ -170,6 +173,12 @@ impl Component for Register {
     }
 
     fn render(&self, frame: &mut Frame) {
+        // Add this to set the global background to black:
+        frame.render_widget(
+            Block::default().style(Style::default().bg(Color::Black)),
+            frame.area(),
+        );
+
         let vertical_layout = Layout::default()
             .direction(Direction::Vertical)
             .constraints(
@@ -280,9 +289,9 @@ impl Component for Register {
         // --- Back to Login Text ---
         let back_to_login_text = Paragraph::new(Span::styled(
             if self.focus_index == 3 {
-                "◀ Back to Login"
+                "► Back to Login ◄"
             } else {
-                "  Back to Login"
+                "  Back to Login  "
             },
             Style::default()
                 .fg(if self.focus_index == 3 {

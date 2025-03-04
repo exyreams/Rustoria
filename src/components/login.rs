@@ -229,6 +229,13 @@ impl Component for Login {
     }
 
     fn render(&self, frame: &mut Frame) {
+        // Set the global style for the entire frame.  Crucially, this comes *before*
+        // any other rendering.
+        frame.render_widget(
+            Block::default().style(Style::default().bg(Color::Black)),
+            frame.area(),
+        );
+
         let vertical_layout = Layout::default()
             .direction(Direction::Vertical)
             .constraints(
@@ -362,9 +369,9 @@ impl Component for Login {
         // --- Create Account ---
         let create_account_text = Paragraph::new(Span::styled(
             if self.selected_index == 2 {
-                "► Create Account"
+                "► Create Account ◄"
             } else {
-                "  Create Account"
+                "  Create Account  "
             },
             Style::default().fg(if self.selected_index == 2 {
                 Color::Cyan
@@ -378,9 +385,9 @@ impl Component for Login {
         // --- Exit ---
         let exit_text = Paragraph::new(Span::styled(
             if self.selected_index == 3 {
-                "► Exit"
+                "► Exit ◄"
             } else {
-                "  Exit"
+                "  Exit  "
             },
             Style::default().fg(if self.selected_index == 3 {
                 Color::Cyan
@@ -393,7 +400,7 @@ impl Component for Login {
 
         // --- Help Text ---
         let help_text = Paragraph::new(vec![Line::from(Span::styled(
-            "TAB/Arrow Keys: Navigate | ENTER: Select | ESC: Toggle Exit Dialog",
+            "TAB/Arrow Keys: Navigate | ENTER: Login/Select | ESC: Toggle Exit Dialog",
             Style::default().fg(Color::DarkGray),
         ))])
         .alignment(Alignment::Center);
@@ -418,10 +425,11 @@ impl Component for Login {
             let dialog_block = Block::default()
                 .title(" Confirm Exit ")
                 .add_modifier(Modifier::BOLD)
-                .title_style(Style::default().fg(Color::Cyan))
+                .title_style(Style::default().fg(Color::Black))
                 .borders(Borders::ALL)
-                .border_type(BorderType::Rounded)
-                .border_style(Style::default().fg(Color::Cyan));
+                .border_type(BorderType::Thick)
+                .border_style(Style::default().fg(Color::Black))
+                .style(Style::default().bg(Color::LightCyan));
 
             frame.render_widget(dialog_block.clone(), dialog_area);
 
@@ -438,7 +446,7 @@ impl Component for Login {
                 .split(inner_area);
 
             let message = Paragraph::new("Are you sure you want to exit?")
-                .style(Style::default().fg(Color::White))
+                .style(Style::default().fg(Color::Black))
                 .add_modifier(Modifier::BOLD)
                 .alignment(Alignment::Center);
 
@@ -455,20 +463,32 @@ impl Component for Login {
                     .fg(Color::Green)
                     .add_modifier(Modifier::BOLD)
             } else {
-                Style::default().fg(Color::Gray)
+                Style::default().fg(Color::Black)
             };
 
             let no_style = if self.exit_dialog_selected == 1 {
                 Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)
             } else {
-                Style::default().fg(Color::Gray)
+                Style::default().fg(Color::Black)
             };
 
-            let yes_button = Paragraph::new("Yes")
+            let yes_text = if self.exit_dialog_selected == 0 {
+                "► Yes ◄"
+            } else {
+                "  Yes  "
+            };
+
+            let no_text = if self.exit_dialog_selected == 1 {
+                "► No ◄"
+            } else {
+                "  No  "
+            };
+
+            let yes_button = Paragraph::new(yes_text)
                 .style(yes_style)
                 .alignment(Alignment::Center);
 
-            let no_button = Paragraph::new("No")
+            let no_button = Paragraph::new(no_text)
                 .style(no_style)
                 .alignment(Alignment::Center);
 
