@@ -1,5 +1,6 @@
 //! Database module for Rustoria.
 
+use crate::models::Patient;
 use anyhow::{Context, Result};
 use bcrypt::{hash, verify, DEFAULT_COST};
 use rusqlite::{params, Connection};
@@ -78,4 +79,31 @@ pub fn get_username(user_id: i64) -> Result<String> {
     let username: String = stmt.query_row(params![user_id], |row| row.get(0))?;
 
     Ok(username)
+}
+
+/// Creates a new patient in the database.
+pub fn create_patient(patient: &Patient) -> Result<()> {
+    let db_path = Path::new(DB_NAME);
+    let conn = Connection::open(db_path)?;
+    conn.execute(
+        "INSERT INTO patients (first_name, last_name, date_of_birth, gender, address, phone_number, email, medical_history, allergies, current_medications) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        params![
+            patient.first_name,
+            patient.last_name,
+            patient.date_of_birth,
+            match patient.gender {
+                crate::models::Gender::Male => "Male",
+                crate::models::Gender::Female => "Female",
+                crate::models::Gender::Other => "Other",
+            },
+            patient.address,
+            patient.phone_number,
+            patient.email,
+            patient.medical_history,
+            patient.allergies,
+            patient.current_medications,
+        ],
+    )?;
+
+    Ok(())
 }

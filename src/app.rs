@@ -1,6 +1,7 @@
 //! The main application state and logic for Rustoria.
 
 use crate::auth::{login, Credentials};
+use crate::components::hospital;
 use crate::components::{home::Home, login::Login, register::Register, Component};
 use crate::tui::{self, Tui};
 use anyhow::Result;
@@ -34,6 +35,7 @@ pub struct App {
     pub home: Home,
     pub login: Login,
     pub register: Register,
+    pub hospital: Option<hospital::HospitalApp>, // Add HospitalApp
 }
 
 impl App {
@@ -45,6 +47,7 @@ impl App {
             home: Home::new(),
             login: Login::new(),
             register: Register::new(),
+            hospital: None, // Initialize as None
         }
     }
 
@@ -136,7 +139,13 @@ impl App {
                         if let crossterm::event::Event::Key(key) = event {
                             if let Some(selected_app) = self.home.handle_input(key)? {
                                 match selected_app {
-                                    SelectedApp::Hospital | SelectedApp::Pharmacy => {
+                                    SelectedApp::Hospital => {
+                                        // Instantiate HospitalApp when switching to it.
+                                        self.hospital = Some(hospital::HospitalApp::new());
+                                        self.state = AppState::Running(selected_app);
+                                    }
+                                    SelectedApp::Pharmacy => {
+                                        //  self.pharmacy = Some(pharmacy::PharmacyApp::new()); // When you create PharmacyApp
                                         self.state = AppState::Running(selected_app);
                                     }
                                     SelectedApp::Quit => {
@@ -153,15 +162,26 @@ impl App {
                     }
                     AppState::Running(selected_app) => match selected_app {
                         SelectedApp::Hospital => {
-                            if let crossterm::event::Event::Key(KeyEvent {
-                                code: KeyCode::Esc,
-                                ..
-                            }) = event
-                            {
+                            if let Some(hospital) = &mut self.hospital {
+                                if let crossterm::event::Event::Key(key) = event {
+                                    if let Some(action) = hospital.handle_input(key)? {
+                                        match action {
+                                            SelectedApp::None => {
+                                                // Handle going back to the home screen
+                                                self.state = AppState::Home;
+                                                self.hospital = None; // Important: Clean up the state
+                                            }
+                                            _ => {} // Handle other actions from the hospital app
+                                        }
+                                    }
+                                }
+                            } else {
+                                // Handle the case where hospital is None (shouldn't happen)
                                 self.state = AppState::Home;
                             }
                         }
                         SelectedApp::Pharmacy => {
+                            //  Similar logic for PharmacyApp when you implement it.
                             if let crossterm::event::Event::Key(KeyEvent {
                                 code: KeyCode::Esc,
                                 ..
@@ -195,14 +215,18 @@ impl App {
         match self.state {
             AppState::Init => {}
             AppState::Login => self.login.render(frame),
-            AppState::Register => self.register.render(frame), // Render Register
+            AppState::Register => self.register.render(frame),
             AppState::Home => self.home.render(frame),
-            AppState::Running(_) => match self.state {
-                AppState::Running(SelectedApp::Hospital) => {}
-                AppState::Running(SelectedApp::Pharmacy) => {}
-                _ => {}
-            },
-            AppState::Quitting => {}
+            AppState::Running(SelectedApp::Hospital) => {
+                if let Some(hospital) = &self.hospital {
+                    hospital.render(frame);
+                }
+            }
+            AppState::Running(SelectedApp::Pharmacy) => {
+                // Similar rendering logic for PharmacyApp when you implement it
+            }
+            AppState::Running(SelectedApp::None) | AppState::Running(SelectedApp::Quit) => todo!(),
+            AppState::Quitting => todo!(),
         }
     }
 }

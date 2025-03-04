@@ -6,6 +6,7 @@ use crossterm::event::KeyEvent;
 
 // Re-export the components for easier access
 pub mod home;
+pub mod hospital;
 pub mod login;
 pub mod register;
 
