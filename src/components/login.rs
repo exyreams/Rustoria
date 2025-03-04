@@ -103,12 +103,12 @@ impl Login {
                     0 | 1 => {
                         // Check for empty fields before signaling login attempt
                         if self.username.is_empty() {
-                            self.set_error_message("Username cannot be empty.".to_string());
+                            self.set_error_message("⚠️ Username cannot be empty.".to_string());
                             return Ok(false);
                         }
 
                         if self.password.is_empty() {
-                            self.set_error_message("Password cannot be empty.".to_string());
+                            self.set_error_message("⚠️ Password cannot be empty.".to_string());
                             return Ok(false);
                         }
 

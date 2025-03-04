@@ -23,5 +23,5 @@ pub struct Credentials {
 /// the credentials are valid, otherwise returns an error.
 pub fn login(credentials: Credentials) -> Result<i64> {
     db::authenticate_user(&credentials.username, &credentials.password)
-        .context("Authentication failed")
+        .context("⚠️ Authentication failed")
 }
