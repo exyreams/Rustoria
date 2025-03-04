@@ -269,12 +269,12 @@ impl Component for Home {
             match app {
                 SelectedApp::Hospital => {
                     let hospital_options = vec![
-                        "Patient Management",
-                        "Staff Scheduling",
-                        "Billing & Financials",
-                        "Medical Records",
+                        "Billing & Finance",
                         "Inventory Management",
+                        "Medical Records",
+                        "Patient Management",
                         "Reports & Analytics",
+                        "Staff Scheduling",
                     ];
 
                     let selected = self.hospital_menu_state.selected();
@@ -306,10 +306,10 @@ impl Component for Home {
                 }
                 SelectedApp::Pharmacy => {
                     let pharmacy_options = vec![
-                        "Inventory Management",
-                        "Procurement Management",
                         "Distribution & Sales",
                         "Expiry & Wastage Management",
+                        "Inventory Management",
+                        "Procurement Management",
                         "Reporting & Analytics",
                     ];
 
