@@ -1,6 +1,6 @@
 //! Database module for Rustoria.
 
-use crate::models::{Gender, Patient}; // Import Gender here
+use crate::models::{Gender, Patient};
 use anyhow::{Context, Result};
 use bcrypt::{hash, verify, DEFAULT_COST};
 use rusqlite::{params, Connection};
@@ -10,7 +10,6 @@ use std::path::Path;
 const DB_NAME: &str = "rustoria.db";
 
 /// Initializes the database.
-/// Creates the database file if it doesn't exist and applies the schema.
 pub fn init_db() -> Result<()> {
     let db_path = Path::new(DB_NAME);
     let conn = Connection::open(db_path)?;
@@ -124,7 +123,7 @@ pub fn get_all_patients() -> Result<Vec<Patient>> {
                 "Male" => Gender::Male,
                 "Female" => Gender::Female,
                 "Other" => Gender::Other,
-                _ => Gender::Other, // Or handle the error appropriately
+                _ => Gender::Other,
             },
             address: row.get(5)?,
             phone_number: row.get(6)?,
@@ -141,4 +140,14 @@ pub fn get_all_patients() -> Result<Vec<Patient>> {
     }
 
     Ok(patients)
+}
+
+/// Deletes a patient from the database by ID.
+pub fn delete_patient(patient_id: i64) -> Result<()> {
+    let db_path = Path::new(DB_NAME);
+    let conn = Connection::open(db_path)?;
+
+    conn.execute("DELETE FROM patients WHERE id = ?", params![patient_id])?;
+
+    Ok(())
 }

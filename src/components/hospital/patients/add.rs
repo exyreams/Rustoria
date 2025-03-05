@@ -302,7 +302,9 @@ impl Component for AddPatient {
     fn handle_input(&mut self, event: KeyEvent) -> Result<Option<crate::app::SelectedApp>> {
         // Delegate the PatientAction and convert it.
         match self.handle_input(event)? {
-            Some(PatientAction::BackToHome) => Ok(Some(crate::app::SelectedApp::None)),
+            Some(PatientAction::BackToHome) | Some(PatientAction::BackToList) => {
+                Ok(Some(crate::app::SelectedApp::None))
+            }
             None => Ok(None),
         }
     }

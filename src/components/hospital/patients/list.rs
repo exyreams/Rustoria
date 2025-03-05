@@ -1,3 +1,5 @@
+//! List Patient component for the Hospital application.
+
 use crate::components::hospital::patients::PatientAction;
 use crate::components::Component;
 use crate::db;
@@ -167,6 +169,7 @@ impl Component for ListPatients {
     fn handle_input(&mut self, event: KeyEvent) -> Result<Option<crate::app::SelectedApp>> {
         match self.handle_input(event)? {
             Some(PatientAction::BackToHome) => Ok(Some(crate::app::SelectedApp::None)),
+            Some(PatientAction::BackToList) => Ok(None),
             None => Ok(None),
         }
     }

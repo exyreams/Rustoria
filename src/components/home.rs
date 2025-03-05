@@ -38,7 +38,7 @@ impl Home {
     pub fn new() -> Self {
         // Define feature names
         let features = vec![
-            "Billing & Financials",
+            "Billing & Finance",
             "Inventory Management",
             "Medical Records",
             "Patient Management",
@@ -48,7 +48,7 @@ impl Home {
 
         // Define submenu options for each feature
         let submenu_options = vec![
-            // Billing & Financials
+            // Billing & Finance
             vec![
                 "Generate Invoice",
                 "View Billing Reports",
@@ -168,7 +168,7 @@ impl Home {
 
                         // Return different SelectedApp based on feature and submenu
                         return Ok(Some(match feature_idx {
-                            // Billing & Financials
+                            // Billing & Finance
                             0 => match submenu_idx {
                                 // 0 => SelectedApp::BillingInvoice,    // Generate Invoice
                                 // 1 => SelectedApp::BillingReports,    // View Billing Reports
@@ -194,7 +194,7 @@ impl Home {
                                 0 => SelectedApp::PatientAdd,  // Add Patient
                                 1 => SelectedApp::PatientList, // List Patients
                                 // 2 => SelectedApp::PatientUpdate,     // Update Patient
-                                // 3 => SelectedApp::PatientDelete,     // Delete Patient
+                                3 => SelectedApp::PatientDelete, // Delete Patient
                                 _ => SelectedApp::Hospital,
                             },
                             // Reports & Analytics
