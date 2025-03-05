@@ -11,7 +11,6 @@ use crossterm::event::{KeyCode, KeyEvent};
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SelectedApp {
     Hospital,
-    Pharmacy,
     None,
     Quit,
 }
@@ -109,7 +108,6 @@ impl App {
                                     SelectedApp::Hospital => {
                                         self.state = AppState::Register;
                                     }
-                                    _ => {}
                                 }
                             }
                         }
@@ -144,10 +142,6 @@ impl App {
                                         self.hospital = Some(hospital::HospitalApp::new());
                                         self.state = AppState::Running(selected_app);
                                     }
-                                    SelectedApp::Pharmacy => {
-                                        //  self.pharmacy = Some(pharmacy::PharmacyApp::new()); // When you create PharmacyApp
-                                        self.state = AppState::Running(selected_app);
-                                    }
                                     SelectedApp::Quit => {
                                         self.should_quit = true;
                                         return Ok(());
@@ -177,16 +171,6 @@ impl App {
                                 }
                             } else {
                                 // Handle the case where hospital is None (shouldn't happen)
-                                self.state = AppState::Home;
-                            }
-                        }
-                        SelectedApp::Pharmacy => {
-                            //  Similar logic for PharmacyApp when you implement it.
-                            if let crossterm::event::Event::Key(KeyEvent {
-                                code: KeyCode::Esc,
-                                ..
-                            }) = event
-                            {
                                 self.state = AppState::Home;
                             }
                         }
@@ -221,9 +205,6 @@ impl App {
                 if let Some(hospital) = &self.hospital {
                     hospital.render(frame);
                 }
-            }
-            AppState::Running(SelectedApp::Pharmacy) => {
-                // Similar rendering logic for PharmacyApp when you implement it
             }
             AppState::Running(SelectedApp::None) | AppState::Running(SelectedApp::Quit) => todo!(),
             AppState::Quitting => todo!(),
