@@ -229,10 +229,9 @@ impl Component for Login {
     }
 
     fn render(&self, frame: &mut Frame) {
-        // Set the global style for the entire frame.  Crucially, this comes *before*
-        // any other rendering.
+        // Set the global background color
         frame.render_widget(
-            Block::default().style(Style::default().bg(Color::Black)),
+            Block::default().style(Style::default().bg(Color::Rgb(16, 16, 28))),
             frame.area(),
         );
 
@@ -271,33 +270,36 @@ impl Component for Login {
             Line::from("╚═╝░░╚═╝░╚═════╝░╚═════╝░░░░╚═╝░░░░╚════╝░╚═╝░░╚═╝╚═╝╚═╝░░╚═╝".to_string()),
         ]))
         .alignment(Alignment::Center)
-        .style(Style::default().fg(Color::Cyan));
+        .style(Style::default().fg(Color::Rgb(129, 199, 245))); // Updated color to match home page theme
         frame.render_widget(title, vertical_layout[0]);
 
         // --- Slogan ---
         let title_block = Block::default().borders(Borders::NONE);
-        let title = Paragraph::new(Text::from(vec![
-            Line::from(Span::styled(
-                "Seamless Hospital & Pharmacy Operations",
-                Style::default()
-                    .fg(Color::Cyan)
-                    .add_modifier(Modifier::BOLD)
-                    .add_modifier(Modifier::ITALIC),
-            )),
-            Line::from(Span::styled(
-                "Seamless Hospital & Pharmacy Operations",
-                Style::default().fg(Color::Gray),
-            )),
-        ]))
+        let title = Paragraph::new(Text::from(vec![Line::from(Span::styled(
+            "Seamless Hospital & Pharmacy Operations",
+            Style::default()
+                .fg(Color::Rgb(140, 219, 140)) // Green color from home page
+                .add_modifier(Modifier::BOLD)
+                .add_modifier(Modifier::ITALIC),
+        ))]))
         .block(title_block)
         .alignment(Alignment::Center);
         frame.render_widget(title, vertical_layout[1]);
+
+        // --- Login Form Container ---
+        let login_area = centered_rect(70, 48, frame.area());
+        let login_block = Block::default()
+            .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
+            .border_style(Style::default().fg(Color::Rgb(75, 75, 120)))
+            .style(Style::default().bg(Color::Rgb(22, 22, 35)));
+        frame.render_widget(login_block.clone(), login_area);
 
         // --- "Login to Rustoria" ---
         let subtitle = Paragraph::new(Span::styled(
             "Login to Rustoria",
             Style::default()
-                .fg(Color::White)
+                .fg(Color::Rgb(230, 230, 250))
                 .add_modifier(Modifier::BOLD),
         ))
         .alignment(Alignment::Center);
@@ -307,21 +309,24 @@ impl Component for Login {
         let username_block = Block::default()
             .borders(Borders::ALL)
             .border_type(BorderType::Rounded)
-            .title(if self.selected_index == 0 {
-                " Username "
+            .title(" Username ")
+            .title_style(
+                Style::default()
+                    .fg(Color::Rgb(230, 230, 250))
+                    .add_modifier(Modifier::BOLD),
+            )
+            .border_style(if self.selected_index == 0 {
+                Style::default().fg(Color::Rgb(250, 250, 110)) // Yellow highlight when selected
             } else {
-                " Username "
+                Style::default().fg(Color::Rgb(140, 140, 200))
             })
-            .style(Style::default().fg(if self.selected_index == 0 {
-                Color::Cyan
-            } else {
-                Color::White
-            }));
+            .style(Style::default().bg(Color::Rgb(26, 26, 36)));
 
         // Create a narrower area for the username field (60% of width, centered)
         let username_area = centered_rect(60, 100, vertical_layout[5]);
         let username_input = Paragraph::new(self.username.clone())
             .block(username_block)
+            .style(Style::default().fg(Color::Rgb(220, 220, 240)))
             .alignment(Alignment::Left);
         frame.render_widget(username_input, username_area);
 
@@ -329,21 +334,24 @@ impl Component for Login {
         let password_block = Block::default()
             .borders(Borders::ALL)
             .border_type(BorderType::Rounded)
-            .title(if self.selected_index == 1 {
-                " Password "
+            .title(" Password ")
+            .title_style(
+                Style::default()
+                    .fg(Color::Rgb(230, 230, 250))
+                    .add_modifier(Modifier::BOLD),
+            )
+            .border_style(if self.selected_index == 1 {
+                Style::default().fg(Color::Rgb(250, 250, 110)) // Yellow highlight when selected
             } else {
-                " Password "
+                Style::default().fg(Color::Rgb(140, 140, 200))
             })
-            .style(Style::default().fg(if self.selected_index == 1 {
-                Color::Cyan
-            } else {
-                Color::White
-            }));
+            .style(Style::default().bg(Color::Rgb(26, 26, 36)));
 
         // Create a narrower area for the password field (60% of width, centered)
         let password_area = centered_rect(60, 100, vertical_layout[6]);
         let password_input = Paragraph::new("•".repeat(self.password.len()))
             .block(password_block)
+            .style(Style::default().fg(Color::Rgb(220, 220, 240)))
             .alignment(Alignment::Left);
         frame.render_widget(password_input, password_area);
 
@@ -351,7 +359,9 @@ impl Component for Login {
         if let Some(error) = &self.error_message {
             let error_message = Paragraph::new(Span::styled(
                 error,
-                Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+                Style::default()
+                    .fg(Color::Rgb(255, 100, 100))
+                    .add_modifier(Modifier::BOLD),
             ))
             .alignment(Alignment::Center);
             frame.render_widget(error_message, vertical_layout[7]);
@@ -359,7 +369,7 @@ impl Component for Login {
             let success_message = Paragraph::new(Span::styled(
                 success,
                 Style::default()
-                    .fg(Color::Green)
+                    .fg(Color::Rgb(140, 219, 140))
                     .add_modifier(Modifier::BOLD),
             ))
             .alignment(Alignment::Center);
@@ -367,42 +377,46 @@ impl Component for Login {
         }
 
         // --- Create Account ---
-        let create_account_text = Paragraph::new(Span::styled(
-            if self.selected_index == 2 {
-                "► Create Account ◄"
-            } else {
-                "  Create Account  "
-            },
-            Style::default().fg(if self.selected_index == 2 {
-                Color::Cyan
-            } else {
-                Color::White
-            }),
-        ))
+        let create_account_style = if self.selected_index == 2 {
+            Style::default()
+                .fg(Color::Rgb(250, 250, 110))
+                .add_modifier(Modifier::BOLD)
+        } else {
+            Style::default().fg(Color::Rgb(180, 180, 200))
+        };
+
+        let create_account_text = Paragraph::new(if self.selected_index == 2 {
+            "► Create Account ◄"
+        } else {
+            "  Create Account  "
+        })
+        .style(create_account_style)
         .alignment(Alignment::Center);
         frame.render_widget(create_account_text, vertical_layout[9]);
 
         // --- Exit ---
-        let exit_text = Paragraph::new(Span::styled(
-            if self.selected_index == 3 {
-                "► Exit ◄"
-            } else {
-                "  Exit  "
-            },
-            Style::default().fg(if self.selected_index == 3 {
-                Color::Cyan
-            } else {
-                Color::White
-            }),
-        ))
+        let exit_style = if self.selected_index == 3 {
+            Style::default()
+                .fg(Color::Rgb(255, 100, 100))
+                .add_modifier(Modifier::BOLD)
+        } else {
+            Style::default().fg(Color::Rgb(180, 180, 200))
+        };
+
+        let exit_text = Paragraph::new(if self.selected_index == 3 {
+            "► Exit ◄"
+        } else {
+            "  Exit  "
+        })
+        .style(exit_style)
         .alignment(Alignment::Center);
         frame.render_widget(exit_text, vertical_layout[11]);
 
         // --- Help Text ---
-        let help_text = Paragraph::new(vec![Line::from(Span::styled(
+        let help_text = Paragraph::new(
             "TAB/Arrow Keys: Navigate | ENTER: Login/Select | ESC: Toggle Exit Dialog",
-            Style::default().fg(Color::DarkGray),
-        ))])
+        )
+        .style(Style::default().fg(Color::Rgb(140, 140, 170)))
         .alignment(Alignment::Center);
         frame.render_widget(help_text, vertical_layout[13]);
 
@@ -421,15 +435,18 @@ impl Component for Login {
             // Clear the background
             frame.render_widget(Clear, dialog_area);
 
-            // Render dialog box
+            // Render dialog box - updated to match the app theme
             let dialog_block = Block::default()
                 .title(" Confirm Exit ")
-                .add_modifier(Modifier::BOLD)
-                .title_style(Style::default().fg(Color::Black))
+                .title_style(
+                    Style::default()
+                        .fg(Color::Rgb(230, 230, 250))
+                        .add_modifier(Modifier::BOLD),
+                )
                 .borders(Borders::ALL)
-                .border_type(BorderType::Thick)
-                .border_style(Style::default().fg(Color::Black))
-                .style(Style::default().bg(Color::LightCyan));
+                .border_type(BorderType::Rounded)
+                .border_style(Style::default().fg(Color::Rgb(140, 140, 200)))
+                .style(Style::default().bg(Color::Rgb(30, 30, 46)));
 
             frame.render_widget(dialog_block.clone(), dialog_area);
 
@@ -446,7 +463,7 @@ impl Component for Login {
                 .split(inner_area);
 
             let message = Paragraph::new("Are you sure you want to exit?")
-                .style(Style::default().fg(Color::Black))
+                .style(Style::default().fg(Color::Rgb(220, 220, 240)))
                 .add_modifier(Modifier::BOLD)
                 .alignment(Alignment::Center);
 
@@ -458,18 +475,21 @@ impl Component for Login {
                 .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
                 .split(content_layout[1]);
 
+            // Updated button styles to match the app theme
             let yes_style = if self.exit_dialog_selected == 0 {
                 Style::default()
-                    .fg(Color::Green)
+                    .fg(Color::Rgb(140, 219, 140))
                     .add_modifier(Modifier::BOLD)
             } else {
-                Style::default().fg(Color::Black)
+                Style::default().fg(Color::Rgb(180, 180, 200))
             };
 
             let no_style = if self.exit_dialog_selected == 1 {
-                Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)
+                Style::default()
+                    .fg(Color::Rgb(255, 100, 100))
+                    .add_modifier(Modifier::BOLD)
             } else {
-                Style::default().fg(Color::Black)
+                Style::default().fg(Color::Rgb(180, 180, 200))
             };
 
             let yes_text = if self.exit_dialog_selected == 0 {
