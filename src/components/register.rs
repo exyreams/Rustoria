@@ -173,40 +173,49 @@ impl Component for Register {
     }
 
     fn render(&self, frame: &mut Frame) {
-        // Add this to set the global background to black:
+        // Set the global background color to match the home page
         frame.render_widget(
-            Block::default().style(Style::default().bg(Color::Black)),
+            Block::default().style(Style::default().bg(Color::Rgb(16, 16, 28))),
             frame.area(),
         );
 
+        // Render a background container for the entire form
+        let form_container = centered_rect(70, 70, frame.area());
+        let container_block = Block::default()
+            .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
+            .border_style(Style::default().fg(Color::Rgb(75, 75, 120)))
+            .style(Style::default().bg(Color::Rgb(22, 22, 35)));
+
+        frame.render_widget(container_block.clone(), form_container);
+
+        // Create layout within the form container
         let vertical_layout = Layout::default()
             .direction(Direction::Vertical)
             .constraints(
                 [
-                    Constraint::Length(1), // Title
+                    Constraint::Length(2), // Title
                     Constraint::Length(1), // Spacing
                     Constraint::Length(3), // Username
-                    Constraint::Length(1), // Username error
+                    Constraint::Length(1), // Spacing
                     Constraint::Length(3), // Password
-                    Constraint::Length(1), // Password error
+                    Constraint::Length(1), // Spacing
                     Constraint::Length(3), // Confirm Password
-                    Constraint::Length(1), // Confirm Password error
-                    Constraint::Length(2), //  Spacing
-                    Constraint::Length(1), // Back to Login text
-                    Constraint::Length(2), // Spacing before help text
+                    Constraint::Length(2), // Error/Success Message
+                    Constraint::Length(2), // Back to Login
                     Constraint::Length(1), // Help text
                     Constraint::Min(0),    // Remaining space
                 ]
                 .as_ref(),
             )
-            .margin(1)
-            .split(frame.area());
+            .margin(2)
+            .split(container_block.inner(form_container));
 
         // --- Title ---
         let title = Paragraph::new("Create Account")
             .style(
                 Style::default()
-                    .fg(Color::White)
+                    .fg(Color::Rgb(230, 230, 250))
                     .add_modifier(Modifier::BOLD),
             )
             .alignment(Alignment::Center);
@@ -216,100 +225,116 @@ impl Component for Register {
         let username_block = Block::default()
             .borders(Borders::ALL)
             .border_type(BorderType::Rounded)
-            .title(if self.focus_index == 0 {
-                " Username "
+            .title(" Username ")
+            .title_style(
+                Style::default()
+                    .fg(Color::Rgb(230, 230, 250))
+                    .add_modifier(Modifier::BOLD),
+            )
+            .border_style(if self.focus_index == 0 {
+                Style::default().fg(Color::Rgb(250, 250, 110)) // Yellow highlight when selected
             } else {
-                " Username "
+                Style::default().fg(Color::Rgb(140, 140, 200))
             })
-            .style(Style::default().fg(if self.focus_index == 0 {
-                Color::Cyan
-            } else {
-                Color::White
-            }));
+            .style(Style::default().bg(Color::Rgb(26, 26, 36)));
 
-        // Create a narrower area for the username field (60% of width, centered)
-        let username_area = centered_rect(60, 100, vertical_layout[2]);
         let username_input = Paragraph::new(self.username.clone())
             .block(username_block)
+            .style(Style::default().fg(Color::Rgb(220, 220, 240)))
             .alignment(Alignment::Left);
-        frame.render_widget(username_input, username_area);
+        frame.render_widget(username_input, vertical_layout[2]);
 
         // --- Password ---
         let password_block = Block::default()
             .borders(Borders::ALL)
             .border_type(BorderType::Rounded)
-            .title(if self.focus_index == 1 {
-                " Password "
+            .title(" Password ")
+            .title_style(
+                Style::default()
+                    .fg(Color::Rgb(230, 230, 250))
+                    .add_modifier(Modifier::BOLD),
+            )
+            .border_style(if self.focus_index == 1 {
+                Style::default().fg(Color::Rgb(250, 250, 110)) // Yellow highlight when selected
             } else {
-                " Password "
+                Style::default().fg(Color::Rgb(140, 140, 200))
             })
-            .style(Style::default().fg(if self.focus_index == 1 {
-                Color::Cyan
-            } else {
-                Color::White
-            }));
+            .style(Style::default().bg(Color::Rgb(26, 26, 36)));
 
-        // Create a narrower area for the password field (60% of width, centered)
-        let password_area = centered_rect(60, 100, vertical_layout[4]);
         let password_input = Paragraph::new("•".repeat(self.password.len()))
             .block(password_block)
+            .style(Style::default().fg(Color::Rgb(220, 220, 240)))
             .alignment(Alignment::Left);
-        frame.render_widget(password_input, password_area);
+        frame.render_widget(password_input, vertical_layout[4]);
 
         // --- Confirm Password ---
         let confirm_password_block = Block::default()
             .borders(Borders::ALL)
             .border_type(BorderType::Rounded)
-            .title(if self.focus_index == 2 {
-                " Confirm Password "
+            .title(" Confirm Password ")
+            .title_style(
+                Style::default()
+                    .fg(Color::Rgb(230, 230, 250))
+                    .add_modifier(Modifier::BOLD),
+            )
+            .border_style(if self.focus_index == 2 {
+                Style::default().fg(Color::Rgb(250, 250, 110)) // Yellow highlight when selected
             } else {
-                " Confirm Password "
+                Style::default().fg(Color::Rgb(140, 140, 200))
             })
-            .style(Style::default().fg(if self.focus_index == 2 {
-                Color::Cyan
-            } else {
-                Color::White
-            }));
+            .style(Style::default().bg(Color::Rgb(26, 26, 36)));
 
-        // Create a narrower area for the confirm password field (60% of width, centered)
-        let confirm_password_area = centered_rect(60, 100, vertical_layout[6]);
         let confirm_password_input = Paragraph::new("•".repeat(self.confirm_password.len()))
             .block(confirm_password_block)
+            .style(Style::default().fg(Color::Rgb(220, 220, 240)))
             .alignment(Alignment::Left);
-        frame.render_widget(confirm_password_input, confirm_password_area);
+        frame.render_widget(confirm_password_input, vertical_layout[6]);
 
-        // --- Error Message (if any) ---
+        // --- Messages (Error or Success) ---
         if let Some(error) = &self.error_message {
             let error_paragraph = Paragraph::new(error.as_str())
-                .style(Style::default().fg(Color::Red))
+                .style(
+                    Style::default()
+                        .fg(Color::Rgb(255, 100, 100))
+                        .add_modifier(Modifier::BOLD),
+                )
                 .alignment(Alignment::Center);
-            frame.render_widget(error_paragraph, vertical_layout[7]); //  Below confirm password
+            frame.render_widget(error_paragraph, vertical_layout[7]);
+        } else if self.registration_success {
+            let success_paragraph =
+                Paragraph::new("✓ Registration successful! You can now log in.")
+                    .style(
+                        Style::default()
+                            .fg(Color::Rgb(140, 219, 140))
+                            .add_modifier(Modifier::BOLD),
+                    )
+                    .alignment(Alignment::Center);
+            frame.render_widget(success_paragraph, vertical_layout[7]);
         }
 
         // --- Back to Login Text ---
-        let back_to_login_text = Paragraph::new(Span::styled(
-            if self.focus_index == 3 {
-                "► Back to Login ◄"
-            } else {
-                "  Back to Login  "
-            },
+        let back_style = if self.focus_index == 3 {
             Style::default()
-                .fg(if self.focus_index == 3 {
-                    Color::Cyan
-                } else {
-                    Color::Gray
-                })
-                .add_modifier(Modifier::BOLD),
-        ))
+                .fg(Color::Rgb(129, 199, 245))
+                .add_modifier(Modifier::BOLD)
+        } else {
+            Style::default().fg(Color::Rgb(180, 180, 200))
+        };
+
+        let back_to_login_text = Paragraph::new(if self.focus_index == 3 {
+            "► Back to Login ◄"
+        } else {
+            "  Back to Login  "
+        })
+        .style(back_style)
         .alignment(Alignment::Center);
-        frame.render_widget(back_to_login_text, vertical_layout[9]);
+        frame.render_widget(back_to_login_text, vertical_layout[8]);
 
         // --- Help Text ---
-        let help_text = Paragraph::new(vec![Line::from(Span::styled(
-            "TAB/Arrow Keys: Navigate | ENTER: Select | ESC: Back to Login",
-            Style::default().fg(Color::DarkGray),
-        ))])
-        .alignment(Alignment::Center);
-        frame.render_widget(help_text, vertical_layout[11]);
+        let help_text =
+            Paragraph::new("TAB/Arrow Keys: Navigate | ENTER: Select | ESC: Back to Login")
+                .style(Style::default().fg(Color::Rgb(140, 140, 170)))
+                .alignment(Alignment::Center);
+        frame.render_widget(help_text, vertical_layout[9]);
     }
 }
