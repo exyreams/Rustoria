@@ -10,7 +10,9 @@ use crossterm::event::{KeyCode, KeyEvent};
 /// Enum representing the different applications within Rustoria.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SelectedApp {
-    Hospital,
+    PatientAdd,  // Add Patient
+    PatientList, // List Patients
+    Hospital,    // Keep this for future hospital sub-modules
     None,
     Quit,
 }
@@ -34,7 +36,7 @@ pub struct App {
     pub home: Home,
     pub login: Login,
     pub register: Register,
-    pub hospital: Option<hospital::HospitalApp>, // Add HospitalApp
+    pub hospital: Option<hospital::HospitalApp>, // HospitalApp instance
 }
 
 impl App {
@@ -46,7 +48,7 @@ impl App {
             home: Home::new(),
             login: Login::new(),
             register: Register::new(),
-            hospital: None, // Initialize as None
+            hospital: None, // Initialize hospital to None
         }
     }
 
@@ -108,6 +110,13 @@ impl App {
                                     SelectedApp::Hospital => {
                                         self.state = AppState::Register;
                                     }
+                                    // Add the missing patterns:
+                                    SelectedApp::PatientAdd | SelectedApp::PatientList => {
+                                        // These shouldn't be selectable from login screen, but we need to handle them
+                                        // You could show an error message or just ignore them
+                                        self.login.error_message =
+                                            Some("Please log in first.".to_string());
+                                    }
                                 }
                             }
                         }
@@ -137,6 +146,25 @@ impl App {
                         if let crossterm::event::Event::Key(key) = event {
                             if let Some(selected_app) = self.home.handle_input(key)? {
                                 match selected_app {
+                                    // Modified cases:
+                                    SelectedApp::PatientAdd => {
+                                        self.hospital = Some(hospital::HospitalApp::new()); // Create
+                                        if let Some(hospital) = &mut self.hospital {
+                                            hospital.patients.state =
+                                                hospital::patients::PatientsState::AddPatient;
+                                            // Set AddPatient state
+                                        }
+                                        self.state = AppState::Running(selected_app);
+                                    }
+                                    SelectedApp::PatientList => {
+                                        self.hospital = Some(hospital::HospitalApp::new()); // Create
+                                        if let Some(hospital) = &mut self.hospital {
+                                            hospital.patients.state =
+                                                hospital::patients::PatientsState::ListPatients; // Set ListPatients state
+                                            hospital.patients.initialize_list()?;
+                                        }
+                                        self.state = AppState::Running(selected_app);
+                                    }
                                     SelectedApp::Hospital => {
                                         // Instantiate HospitalApp when switching to it.
                                         self.hospital = Some(hospital::HospitalApp::new());
@@ -154,30 +182,33 @@ impl App {
                             }
                         }
                     }
+                    // Handle Running state
                     AppState::Running(selected_app) => match selected_app {
-                        SelectedApp::Hospital => {
+                        SelectedApp::PatientAdd | SelectedApp::PatientList => {
                             if let Some(hospital) = &mut self.hospital {
                                 if let crossterm::event::Event::Key(key) = event {
                                     if let Some(action) = hospital.handle_input(key)? {
                                         match action {
+                                            // Go back to home, and clean up the hospital state.
                                             SelectedApp::None => {
-                                                // Handle going back to the home screen
                                                 self.state = AppState::Home;
-                                                self.hospital = None; // Important: Clean up the state
+                                                self.hospital = None;
                                             }
-                                            _ => {} // Handle other actions from the hospital app
+                                            _ => {}
                                         }
                                     }
                                 }
                             } else {
-                                // Handle the case where hospital is None (shouldn't happen)
+                                // If hospital somehow wasn't initialized, go back to home
                                 self.state = AppState::Home;
                             }
                         }
+                        // Add other Running states if we have any
                         _ => {
                             self.state = AppState::Home;
                         }
                     },
+
                     AppState::Quitting => {
                         self.should_quit = true;
                     }
@@ -201,11 +232,19 @@ impl App {
             AppState::Login => self.login.render(frame),
             AppState::Register => self.register.render(frame),
             AppState::Home => self.home.render(frame),
+            // Corrected rendering for the new states:
+            AppState::Running(SelectedApp::PatientAdd)
+            | AppState::Running(SelectedApp::PatientList) => {
+                if let Some(hospital) = &self.hospital {
+                    hospital.render(frame);
+                }
+            }
             AppState::Running(SelectedApp::Hospital) => {
                 if let Some(hospital) = &self.hospital {
                     hospital.render(frame);
                 }
             }
+
             AppState::Running(SelectedApp::None) | AppState::Running(SelectedApp::Quit) => todo!(),
             AppState::Quitting => todo!(),
         }

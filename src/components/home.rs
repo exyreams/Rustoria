@@ -163,7 +163,56 @@ impl Home {
                 if self.selection_mode == 0 {
                     if self.active_panel == 1 {
                         // Selected a submenu item - navigate to appropriate screen
-                        return Ok(Some(SelectedApp::Hospital));
+                        let feature_idx = self.selected_feature_index;
+                        let submenu_idx = self.submenu_states[feature_idx].selected().unwrap_or(0);
+
+                        // Return different SelectedApp based on feature and submenu
+                        return Ok(Some(match feature_idx {
+                            // Billing & Financials
+                            0 => match submenu_idx {
+                                // 0 => SelectedApp::BillingInvoice,    // Generate Invoice
+                                // 1 => SelectedApp::BillingReports,    // View Billing Reports
+                                // 2 => SelectedApp::BillingPayment,    // Process Payment
+                                _ => SelectedApp::Hospital,
+                            },
+                            // Inventory Management
+                            1 => match submenu_idx {
+                                // 0 => SelectedApp::InventoryAdd,      // Add Inventory
+                                // 1 => SelectedApp::InventoryCheck,    // Check Stock
+                                // 2 => SelectedApp::InventoryReorder,  // Auto Reorder
+                                _ => SelectedApp::Hospital,
+                            },
+                            // Medical Records
+                            2 => match submenu_idx {
+                                // 0 => SelectedApp::MedicalStore,      // Store Record
+                                // 1 => SelectedApp::MedicalRetrieve,   // Retrieve Records
+                                // 2 => SelectedApp::MedicalUpdate,     // Update Record
+                                _ => SelectedApp::Hospital,
+                            },
+                            // Patient Management
+                            3 => match submenu_idx {
+                                0 => SelectedApp::PatientAdd,  // Add Patient
+                                1 => SelectedApp::PatientList, // List Patients
+                                // 2 => SelectedApp::PatientUpdate,     // Update Patient
+                                // 3 => SelectedApp::PatientDelete,     // Delete Patient
+                                _ => SelectedApp::Hospital,
+                            },
+                            // Reports & Analytics
+                            4 => match submenu_idx {
+                                // 0 => SelectedApp::ReportsGenerate,   // Generate Report
+                                // 1 => SelectedApp::ReportsExport,     // Export Reports
+                                _ => SelectedApp::Hospital,
+                            },
+                            // Staff Scheduling
+                            5 => match submenu_idx {
+                                // 0 => SelectedApp::StaffAdd,          // Add Staff
+                                // 1 => SelectedApp::StaffAssign,       // Assign Shift
+                                // 2 => SelectedApp::StaffList,         // List Staff
+                                // 3 => SelectedApp::StaffRemove,       // Remove Staff
+                                _ => SelectedApp::Hospital,
+                            },
+                            _ => SelectedApp::Hospital,
+                        }));
                     } else {
                         // If in left panel, move to right panel
                         self.active_panel = 1;
