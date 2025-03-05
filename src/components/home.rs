@@ -13,42 +13,82 @@ use ratatui::{
 
 /// Represents the home screen UI component.
 pub struct Home {
-    /// The selected application index.
-    selected_app_index: usize,
-    /// The available applications.
-    apps: Vec<SelectedApp>,
     /// The logged-in user's username.
     username: Option<String>,
-    /// Selection mode: 0 for apps, 1 for back button
+    /// Selection mode: 0 for menus, 1 for back button
     selection_mode: usize,
-    /// Hospital menu state
-    hospital_menu_state: ListState,
-    /// Pharmacy menu state
-    pharmacy_menu_state: ListState,
     /// Show logout confirmation dialog
     show_logout_dialog: bool,
     /// Logout dialog selected option (0: Yes, 1: No)
     logout_dialog_selected: usize,
+    /// Active panel (0 for left/features, 1 for right/submenus)
+    active_panel: usize,
+    /// Selected feature in the left panel
+    selected_feature_index: usize,
+    /// Submenu states for each feature
+    submenu_states: Vec<ListState>,
+    /// Feature names
+    features: Vec<&'static str>,
+    /// Submenu options for each feature
+    submenu_options: Vec<Vec<&'static str>>,
 }
 
 impl Home {
     /// Creates a new `Home` component.
     pub fn new() -> Self {
-        let mut hospital_state = ListState::default();
-        hospital_state.select(Some(0));
+        // Define feature names
+        let features = vec![
+            "Billing & Financials",
+            "Inventory Management",
+            "Medical Records",
+            "Patient Management",
+            "Reports & Analytics",
+            "Staff Scheduling",
+        ];
 
-        let mut pharmacy_state = ListState::default();
-        pharmacy_state.select(Some(0));
+        // Define submenu options for each feature
+        let submenu_options = vec![
+            // Billing & Financials
+            vec![
+                "Generate Invoice",
+                "View Billing Reports",
+                "Process Payment",
+            ],
+            // Inventory Management
+            vec!["Add Inventory", "Check Stock", "Auto Reorder"],
+            // Medical Records
+            vec!["Store Record", "Retrieve Records", "Update Record"],
+            // Patient Management
+            vec![
+                "Add Patient",
+                "List Patients",
+                "Update Patient",
+                "Delete Patient",
+            ],
+            // Reports & Analytics
+            vec!["Generate Report", "Export Reports"],
+            // Staff Scheduling
+            vec!["Add Staff", "Assign Shift", "List Staff", "Remove Staff"],
+        ];
+
+        // Initialize submenu states for each feature
+        let mut submenu_states = Vec::new();
+        for _ in 0..features.len() {
+            let mut state = ListState::default();
+            state.select(Some(0));
+            submenu_states.push(state);
+        }
 
         Self {
-            selected_app_index: 0,
-            apps: vec![SelectedApp::Hospital, SelectedApp::Pharmacy],
             username: None,
             selection_mode: 0,
-            hospital_menu_state: hospital_state,
-            pharmacy_menu_state: pharmacy_state,
             show_logout_dialog: false,
             logout_dialog_selected: 0,
+            active_panel: 0,
+            selected_feature_index: 0,
+            submenu_states,
+            features,
+            submenu_options,
         }
     }
 
@@ -65,71 +105,84 @@ impl Home {
 
         match key.code {
             KeyCode::Tab => {
-                // Toggle between app selection and back button
+                // Toggle between menu selection and back button
                 self.selection_mode = (self.selection_mode + 1) % 2;
             }
-            KeyCode::Left | KeyCode::Right => {
-                if self.selection_mode == 0 {
-                    // Toggle between applications
-                    self.selected_app_index = (self.selected_app_index + 1) % self.apps.len();
+            KeyCode::Left => {
+                if self.selection_mode == 0 && self.active_panel == 1 {
+                    // Move from right panel to left panel
+                    self.active_panel = 0;
+                }
+            }
+            KeyCode::Right => {
+                if self.selection_mode == 0 && self.active_panel == 0 {
+                    // Move from left panel to right panel
+                    self.active_panel = 1;
                 }
             }
             KeyCode::Up => {
                 if self.selection_mode == 0 {
-                    let selected_app = self.apps[self.selected_app_index];
-                    match selected_app {
-                        SelectedApp::Hospital => {
-                            if let Some(i) = self.hospital_menu_state.selected() {
-                                let i = if i == 0 { 5 } else { i - 1 };
-                                self.hospital_menu_state.select(Some(i));
-                            }
+                    if self.active_panel == 0 {
+                        // Navigate in the features panel (left)
+                        if self.selected_feature_index > 0 {
+                            self.selected_feature_index -= 1;
+                        } else {
+                            self.selected_feature_index = self.features.len() - 1;
                         }
-                        SelectedApp::Pharmacy => {
-                            if let Some(i) = self.pharmacy_menu_state.selected() {
-                                let i = if i == 0 { 4 } else { i - 1 };
-                                self.pharmacy_menu_state.select(Some(i));
-                            }
+                    } else {
+                        // Navigate in the submenu panel (right)
+                        let submenu_state = &mut self.submenu_states[self.selected_feature_index];
+                        if let Some(i) = submenu_state.selected() {
+                            let max_index =
+                                self.submenu_options[self.selected_feature_index].len() - 1;
+                            let new_index = if i > 0 { i - 1 } else { max_index };
+                            submenu_state.select(Some(new_index));
                         }
-                        _ => {}
                     }
                 }
             }
             KeyCode::Down => {
                 if self.selection_mode == 0 {
-                    let selected_app = self.apps[self.selected_app_index];
-                    match selected_app {
-                        SelectedApp::Hospital => {
-                            if let Some(i) = self.hospital_menu_state.selected() {
-                                let i = if i == 5 { 0 } else { i + 1 };
-                                self.hospital_menu_state.select(Some(i));
-                            }
+                    if self.active_panel == 0 {
+                        // Navigate in the features panel (left)
+                        self.selected_feature_index =
+                            (self.selected_feature_index + 1) % self.features.len();
+                    } else {
+                        // Navigate in the submenu panel (right)
+                        let submenu_state = &mut self.submenu_states[self.selected_feature_index];
+                        if let Some(i) = submenu_state.selected() {
+                            let max_index =
+                                self.submenu_options[self.selected_feature_index].len() - 1;
+                            let new_index = (i + 1) % (max_index + 1);
+                            submenu_state.select(Some(new_index));
                         }
-                        SelectedApp::Pharmacy => {
-                            if let Some(i) = self.pharmacy_menu_state.selected() {
-                                let i = if i == 4 { 0 } else { i + 1 };
-                                self.pharmacy_menu_state.select(Some(i));
-                            }
-                        }
-                        _ => {}
                     }
                 }
             }
             KeyCode::Enter => {
                 if self.selection_mode == 0 {
-                    // Select application
-                    return Ok(Some(self.apps[self.selected_app_index]));
+                    if self.active_panel == 1 {
+                        // Selected a submenu item - navigate to appropriate screen
+                        return Ok(Some(SelectedApp::Hospital));
+                    } else {
+                        // If in left panel, move to right panel
+                        self.active_panel = 1;
+                    }
                 } else {
                     // Logout button - show confirmation dialog
                     self.show_logout_dialog = true;
                     self.logout_dialog_selected = 1; // Default to "No"
-                    return Ok(None);
                 }
             }
             KeyCode::Esc => {
-                // Esc also shows logout confirmation
-                self.show_logout_dialog = true;
-                self.logout_dialog_selected = 1; // Default to "No"
-                return Ok(None);
+                if self.active_panel == 1 {
+                    // If in right panel, go back to left panel
+                    self.active_panel = 0;
+                } else {
+                    // If in left panel, show logout confirmation
+                    self.show_logout_dialog = true;
+                    self.logout_dialog_selected = 1; // Default to "No"
+                }
             }
             _ => {}
         }
@@ -164,9 +217,9 @@ impl Component for Home {
     }
 
     fn render(&self, frame: &mut Frame) {
-        //  Apply global black background:
+        // Apply global background
         frame.render_widget(
-            Block::default().style(Style::default().bg(Color::Black)),
+            Block::default().style(Style::default().bg(Color::Rgb(16, 16, 28))),
             frame.area(),
         );
 
@@ -176,20 +229,19 @@ impl Component for Home {
         let main_layout = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(4), // Welcome area (reduced height)
-                Constraint::Length(1), // Spacer
+                Constraint::Length(5), // Welcome banner area
                 Constraint::Length(1), // Instruction text
-                Constraint::Min(10),   // Apps area
-                Constraint::Length(3), // Spacer for help text
-                Constraint::Length(2), // Back button area
+                Constraint::Min(10),   // Main content area
+                Constraint::Length(3), // Help text
+                Constraint::Length(3), // Logout button
             ])
             .split(area);
 
-        // Welcome banner
+        // Welcome banner with gradient background
         let username = self.username.as_deref().unwrap_or("User");
         let welcome_text = Line::from(vec![
             Span::styled(
-                "Welcome, ",
+                "Welcome to Rustoria, ",
                 Style::default()
                     .fg(Color::White)
                     .add_modifier(Modifier::BOLD),
@@ -197,183 +249,233 @@ impl Component for Home {
             Span::styled(
                 username,
                 Style::default()
-                    .fg(Color::Cyan)
+                    .fg(Color::Rgb(129, 199, 245))
                     .add_modifier(Modifier::BOLD),
             ),
         ]);
 
+        let welcome_block = Block::default()
+            .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
+            .border_style(Style::default().fg(Color::Rgb(75, 75, 120)))
+            .style(Style::default().bg(Color::Rgb(24, 24, 40)));
+
+        let welcome_inner = welcome_block.inner(main_layout[0]);
+        frame.render_widget(welcome_block, main_layout[0]);
+
         let welcome_paragraph = Paragraph::new(welcome_text)
             .alignment(Alignment::Center)
-            .block(
-                Block::default()
-                    .borders(Borders::NONE)
-                    .padding(Padding::new(2, 2, 1, 1)),
-            );
+            .block(Block::default().padding(Padding::new(0, 0, 1, 0)));
 
-        frame.render_widget(welcome_paragraph, main_layout[0]);
+        frame.render_widget(welcome_paragraph, welcome_inner);
 
         // Instruction text
-        let instruction = Paragraph::new("Please select an application:")
-            .style(Style::default().fg(Color::LightBlue))
+        let instruction = Paragraph::new("Please select a task:")
+            .style(Style::default().fg(Color::Rgb(180, 190, 254)))
             .alignment(Alignment::Center);
 
-        frame.render_widget(instruction, main_layout[2]);
+        frame.render_widget(instruction, main_layout[1]);
 
-        // Apps area
-        let apps_layout = Layout::default()
+        // Main content area - split into left and right panels
+        let content_layout = Layout::default()
             .direction(Direction::Horizontal)
-            .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
-            .spacing(4)
-            .margin(2)
-            .split(main_layout[3]);
+            .constraints([
+                Constraint::Percentage(40), // Left panel (features)
+                Constraint::Percentage(60), // Right panel (submenu)
+            ])
+            .spacing(2)
+            .margin(1)
+            .split(main_layout[2]);
 
-        // Render application options
-        let app_titles = [" 🏥 Hospital Management ", " 💊 Pharmacy Management "];
+        // Left panel - Hospital Management Features
+        let left_panel_style = if self.active_panel == 0 && self.selection_mode == 0 {
+            Style::default().fg(Color::Rgb(250, 250, 110))
+        } else {
+            Style::default().fg(Color::Rgb(140, 140, 200))
+        };
 
-        for (i, &app) in self.apps.iter().enumerate() {
-            let is_selected = i == self.selected_app_index && self.selection_mode == 0;
+        let left_panel_block = Block::default()
+            .title(" 🏥 Hospital Management ")
+            .title_style(
+                Style::default()
+                    .fg(Color::Rgb(230, 230, 250))
+                    .add_modifier(Modifier::BOLD),
+            )
+            .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
+            .border_style(left_panel_style)
+            .style(Style::default().bg(Color::Rgb(22, 22, 35)));
 
-            let app_name = match app {
-                SelectedApp::Hospital => app_titles[0],
-                SelectedApp::Pharmacy => app_titles[1],
-                _ => "Unknown",
-            };
+        frame.render_widget(left_panel_block.clone(), content_layout[0]);
+        let left_inner = left_panel_block.inner(content_layout[0]);
 
-            let border_style = if is_selected {
-                Style::default().fg(Color::Cyan)
-            } else {
-                Style::default().fg(Color::Gray)
-            };
+        // Apply padding to left panel content with extra top padding
+        let left_padded = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Length(2), // Added extra top padding
+                Constraint::Min(1),
+            ])
+            .split(left_inner);
 
-            let block = Block::default()
-                .title(app_name)
-                .title_style(border_style)
-                .borders(Borders::ALL)
-                .border_type(BorderType::Rounded)
-                .border_style(border_style);
+        // Left panel content (Feature list)
+        let feature_items: Vec<ListItem> = self
+            .features
+            .iter()
+            .enumerate()
+            .map(|(idx, feature)| {
+                let style = if idx == self.selected_feature_index {
+                    if self.active_panel == 0 && self.selection_mode == 0 {
+                        Style::default()
+                            .fg(Color::Rgb(250, 250, 110))
+                            .add_modifier(Modifier::BOLD)
+                    } else {
+                        Style::default()
+                            .fg(Color::Rgb(140, 219, 140))
+                            .add_modifier(Modifier::BOLD)
+                    }
+                } else {
+                    Style::default().fg(Color::Rgb(200, 200, 220))
+                };
 
-            frame.render_widget(block.clone(), apps_layout[i]);
+                let prefix = if idx == self.selected_feature_index {
+                    " ► "
+                } else {
+                    "   "
+                };
 
-            // Render menu options for both apps, always
-            let inner_area = block.inner(apps_layout[i]);
+                // Add icons for each feature
+                let icon = match idx {
+                    0 => "💰",
+                    1 => "📦",
+                    2 => "📋",
+                    3 => "👤",
+                    4 => "📊",
+                    5 => "👥",
+                    _ => "•",
+                };
 
-            // Add padding at the top of options
-            let inner_padded = Layout::default()
-                .direction(Direction::Vertical)
-                .constraints([
-                    Constraint::Length(1), // Top padding
-                    Constraint::Min(1),    // Content area
-                ])
-                .split(inner_area);
+                ListItem::new(format!("{}{} {}", prefix, icon, feature)).style(style)
+            })
+            .collect();
 
-            match app {
-                SelectedApp::Hospital => {
-                    let hospital_options = vec![
-                        "Billing & Finance",
-                        "Inventory Management",
-                        "Medical Records",
-                        "Patient Management",
-                        "Reports & Analytics",
-                        "Staff Scheduling",
-                    ];
+        let features_list = List::new(feature_items)
+            .block(Block::default())
+            .highlight_style(
+                Style::default()
+                    .bg(Color::Rgb(40, 40, 65))
+                    .add_modifier(Modifier::BOLD),
+            );
 
-                    let selected = self.hospital_menu_state.selected();
+        frame.render_widget(features_list, left_padded[1]);
 
-                    let items: Vec<ListItem> = hospital_options
-                        .iter()
-                        .enumerate()
-                        .map(|(idx, option)| {
-                            let style = if is_selected && selected == Some(idx) {
-                                Style::default()
-                                    .fg(Color::Cyan)
-                                    .add_modifier(Modifier::BOLD)
-                            } else {
-                                Style::default().fg(Color::Gray)
-                            };
+        // Right panel - Submenu options
+        let right_panel_style = if self.active_panel == 1 && self.selection_mode == 0 {
+            Style::default().fg(Color::Rgb(250, 250, 110))
+        } else {
+            Style::default().fg(Color::Rgb(140, 140, 200))
+        };
 
-                            let prefix = if is_selected && selected == Some(idx) {
-                                " > "
-                            } else {
-                                "  "
-                            };
-                            ListItem::new(format!("{}{}", prefix, option)).style(style)
-                        })
-                        .collect();
+        let right_panel_block = Block::default()
+            .title(" Sub menu ")
+            .title_style(
+                Style::default()
+                    .fg(Color::Rgb(230, 230, 250))
+                    .add_modifier(Modifier::BOLD),
+            )
+            .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
+            .border_style(right_panel_style)
+            .style(Style::default().bg(Color::Rgb(22, 22, 35)));
 
-                    let list = List::new(items);
+        frame.render_widget(right_panel_block.clone(), content_layout[1]);
+        let right_inner = right_panel_block.inner(content_layout[1]);
 
-                    frame.render_widget(list, inner_padded[1]);
-                }
-                SelectedApp::Pharmacy => {
-                    let pharmacy_options = vec![
-                        "Distribution & Sales",
-                        "Expiry & Wastage Management",
-                        "Inventory Management",
-                        "Procurement Management",
-                        "Reporting & Analytics",
-                    ];
+        // Current submenu options for the selected feature
+        let current_submenu = &self.submenu_options[self.selected_feature_index];
+        let current_submenu_state = &self.submenu_states[self.selected_feature_index];
 
-                    let selected = self.pharmacy_menu_state.selected();
+        // Right panel content (Submenu list) - without the feature name as title
+        let submenu_items: Vec<ListItem> = current_submenu
+            .iter()
+            .enumerate()
+            .map(|(idx, option)| {
+                let style = if current_submenu_state.selected() == Some(idx) {
+                    if self.active_panel == 1 && self.selection_mode == 0 {
+                        Style::default()
+                            .fg(Color::Rgb(250, 250, 110))
+                            .add_modifier(Modifier::BOLD)
+                    } else {
+                        Style::default()
+                            .fg(Color::Rgb(129, 199, 245))
+                            .add_modifier(Modifier::BOLD)
+                    }
+                } else {
+                    Style::default().fg(Color::Rgb(200, 200, 220))
+                };
 
-                    let items: Vec<ListItem> = pharmacy_options
-                        .iter()
-                        .enumerate()
-                        .map(|(idx, option)| {
-                            let style = if is_selected && selected == Some(idx) {
-                                Style::default()
-                                    .fg(Color::Cyan)
-                                    .add_modifier(Modifier::BOLD)
-                            } else {
-                                Style::default().fg(Color::Gray)
-                            };
+                let prefix = if current_submenu_state.selected() == Some(idx) {
+                    " ► "
+                } else {
+                    "   "
+                };
 
-                            let prefix = if is_selected && selected == Some(idx) {
-                                " > "
-                            } else {
-                                "  "
-                            };
-                            ListItem::new(format!("{}{}", prefix, option)).style(style)
-                        })
-                        .collect();
+                ListItem::new(format!("{}{}", prefix, option)).style(style)
+            })
+            .collect();
 
-                    let list = List::new(items);
+        let submenu_list = List::new(submenu_items)
+            .block(Block::default().padding(Padding::new(2, 0, 2, 0))) // Added top padding
+            .highlight_style(
+                Style::default()
+                    .bg(Color::Rgb(40, 40, 65))
+                    .add_modifier(Modifier::BOLD),
+            );
 
-                    frame.render_widget(list, inner_padded[1]);
-                }
-                _ => {}
-            }
-        }
+        frame.render_widget(submenu_list, right_inner);
 
-        // Logout link
+        // Help text
+        let help_text =
+            "←→: Switch panels | ↑↓: Navigate | Enter: Select | Tab: Logout | Esc: Back";
+        let help_paragraph = Paragraph::new(help_text)
+            .style(Style::default().fg(Color::Rgb(140, 140, 170)))
+            .alignment(Alignment::Center);
+
+        frame.render_widget(help_paragraph, main_layout[3]);
+
+        // Logout button
         let back_text = if self.selection_mode == 1 {
-            "► Logout ◄"
+            "[ Logout ]"
         } else {
             "  Logout  "
         };
 
         let back_style = if self.selection_mode == 1 {
             Style::default()
-                .fg(Color::Cyan)
+                .fg(Color::Rgb(255, 100, 100))
                 .add_modifier(Modifier::BOLD)
         } else {
-            Style::default().fg(Color::Gray)
+            Style::default().fg(Color::Rgb(180, 180, 200))
         };
 
+        let back_block = Block::default()
+            .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
+            .border_style(if self.selection_mode == 1 {
+                Style::default().fg(Color::Rgb(255, 100, 100))
+            } else {
+                Style::default().fg(Color::Rgb(100, 100, 140))
+            })
+            .style(Style::default().bg(Color::Rgb(26, 26, 36)));
+
+        frame.render_widget(back_block.clone(), main_layout[4]);
+
+        let inner_logout = back_block.inner(main_layout[4]);
         let back_paragraph = Paragraph::new(back_text)
             .style(back_style)
             .alignment(Alignment::Center);
 
-        frame.render_widget(back_paragraph, main_layout[5]);
-
-        // Help text at the bottom with added spacing
-        let help_area = main_layout[4];
-
-        let help_text = "Tab: Switch focus | Left/Right: Change selection | Up/Down: Navigate menu | Enter: Select";
-        let help_paragraph = Paragraph::new(help_text)
-            .style(Style::default().fg(Color::DarkGray))
-            .alignment(Alignment::Center);
-
-        frame.render_widget(help_paragraph, help_area);
+        frame.render_widget(back_paragraph, inner_logout);
 
         // Render logout confirmation dialog if needed
         if self.show_logout_dialog {
@@ -397,15 +499,18 @@ impl Home {
         // Clear the background
         frame.render_widget(Clear, dialog_area);
 
-        // Render dialog box
+        // Render dialog box - updated to match the app theme
         let dialog_block = Block::default()
             .title(" Confirm Logout ")
-            .add_modifier(Modifier::BOLD)
-            .title_style(Style::default().fg(Color::Black))
+            .title_style(
+                Style::default()
+                    .fg(Color::Rgb(230, 230, 250))
+                    .add_modifier(Modifier::BOLD),
+            )
             .borders(Borders::ALL)
-            .border_type(BorderType::Thick)
-            .border_style(Style::default().fg(Color::Black))
-            .style(Style::default().bg(Color::LightCyan));
+            .border_type(BorderType::Rounded)
+            .border_style(Style::default().fg(Color::Rgb(140, 140, 200)))
+            .style(Style::default().bg(Color::Rgb(30, 30, 46)));
 
         frame.render_widget(dialog_block.clone(), dialog_area);
 
@@ -422,7 +527,7 @@ impl Home {
             .split(inner_area);
 
         let message = Paragraph::new("Are you sure you want to logout?")
-            .style(Style::default().fg(Color::Black))
+            .style(Style::default().fg(Color::Rgb(220, 220, 240)))
             .add_modifier(Modifier::BOLD)
             .alignment(Alignment::Center);
 
@@ -434,18 +539,21 @@ impl Home {
             .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
             .split(content_layout[1]);
 
+        // Updated button styles to match the app theme
         let yes_style = if self.logout_dialog_selected == 0 {
             Style::default()
-                .fg(Color::Green)
+                .fg(Color::Rgb(140, 219, 140))
                 .add_modifier(Modifier::BOLD)
         } else {
-            Style::default().fg(Color::Black)
+            Style::default().fg(Color::Rgb(180, 180, 200))
         };
 
         let no_style = if self.logout_dialog_selected == 1 {
-            Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)
+            Style::default()
+                .fg(Color::Rgb(255, 100, 100))
+                .add_modifier(Modifier::BOLD)
         } else {
-            Style::default().fg(Color::Black)
+            Style::default().fg(Color::Rgb(180, 180, 200))
         };
 
         let yes_text = if self.logout_dialog_selected == 0 {
