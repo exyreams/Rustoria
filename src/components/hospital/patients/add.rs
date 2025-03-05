@@ -285,9 +285,6 @@ impl AddPatient {
 
                             // Clear any error message
                             self.clear_error();
-
-                            // return Ok(Some(PatientAction::BackToHome)); // Or stay on add screen
-                            return Ok(None); // stay on add screen for now.
                         }
                         Err(e) => {
                             self.set_error(format!("Database error: {}", e));
@@ -311,10 +308,10 @@ impl Component for AddPatient {
     }
 
     fn render(&self, frame: &mut Frame) {
-        // Set the overall background color to black
+        // Set the global background color to match our theme
         let area = frame.area();
         frame.render_widget(
-            Block::default().style(Style::default().bg(Color::Black)),
+            Block::default().style(Style::default().bg(Color::Rgb(16, 16, 28))),
             area,
         );
 
@@ -324,7 +321,7 @@ impl Component for AddPatient {
             .constraints([
                 Constraint::Length(3), // Header
                 Constraint::Min(22),   // Body content with input fields
-                Constraint::Length(2), // 2 spaces above error message
+                Constraint::Length(0), // 2 spaces above error message
                 Constraint::Length(1), // Error message itself
                 Constraint::Length(1), // 1 space below error message
                 Constraint::Length(6), // Footer for vertical buttons
@@ -335,27 +332,37 @@ impl Component for AddPatient {
         // Header with title
         let header = Block::default()
             .borders(Borders::BOTTOM)
-            .border_style(Style::default().fg(Color::Cyan))
-            .style(Style::default().bg(Color::Black));
+            .border_style(Style::default().fg(Color::Rgb(75, 75, 120)))
+            .style(Style::default().bg(Color::Rgb(16, 16, 28)));
         frame.render_widget(header, main_layout[0]);
 
         let title = Paragraph::new("🏥 PATIENT REGISTRATION")
             .style(
                 Style::default()
-                    .fg(Color::Cyan)
+                    .fg(Color::Rgb(230, 230, 250))
                     .add_modifier(Modifier::BOLD)
-                    .bg(Color::Black),
+                    .bg(Color::Rgb(16, 16, 28)),
             )
             .alignment(Alignment::Center);
         frame.render_widget(title, main_layout[0]);
+
+        // Body container
+        let body_block = Block::default()
+            .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
+            .border_style(Style::default().fg(Color::Rgb(75, 75, 120)))
+            .style(Style::default().bg(Color::Rgb(22, 22, 35)));
+
+        frame.render_widget(body_block.clone(), main_layout[1]);
+        let body_inner = body_block.inner(main_layout[1]);
 
         // Body section - split into two columns
         let body_layout = Layout::default()
             .direction(Direction::Horizontal)
             .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
-            .split(main_layout[1]);
+            .split(body_inner);
 
-        // Left column for primary info - FIXED: removed extra spacing
+        // Left column for primary info
         let left_layout = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
@@ -370,7 +377,7 @@ impl Component for AddPatient {
             .margin(1)
             .split(body_layout[0]);
 
-        // Right column for secondary info - FIXED: removed extra spacing
+        // Right column for secondary info
         let right_layout = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
@@ -383,88 +390,88 @@ impl Component for AddPatient {
             .margin(1)
             .split(body_layout[1]);
 
-        // Section titles - removed borders
+        // Section titles
         let primary_title = Paragraph::new("● REQUIRED INFORMATION").style(
             Style::default()
-                .fg(Color::Yellow)
+                .fg(Color::Rgb(250, 250, 110))
                 .add_modifier(Modifier::BOLD)
-                .bg(Color::Black),
+                .bg(Color::Rgb(22, 22, 35)),
         );
         frame.render_widget(primary_title, left_layout[0]);
 
         let secondary_title = Paragraph::new("○ OPTIONAL INFORMATION").style(
             Style::default()
-                .fg(Color::Yellow)
+                .fg(Color::Rgb(250, 250, 110))
                 .add_modifier(Modifier::BOLD)
-                .bg(Color::Black),
+                .bg(Color::Rgb(22, 22, 35)),
         );
         frame.render_widget(secondary_title, right_layout[0]);
 
         // Primary Info Fields (Left Column)
         // Each field gets styled differently when focused
-        let required_style = Style::default().fg(Color::Cyan);
+        let required_style = Style::default().fg(Color::Rgb(230, 230, 250));
 
         // First Name (required)
         let first_name_input = Paragraph::new(self.first_name.clone())
-            .style(Style::default().bg(Color::Black))
+            .style(
+                Style::default()
+                    .fg(Color::Rgb(220, 220, 240))
+                    .bg(Color::Rgb(26, 26, 36)),
+            )
             .block(
                 Block::default()
                     .borders(Borders::ALL)
-                    .border_type(if self.focus_index == 0 {
-                        BorderType::Thick
-                    } else {
-                        BorderType::Rounded
-                    })
+                    .border_type(BorderType::Rounded)
                     .title(Span::styled(" First Name* ", required_style))
-                    .border_style(Style::default().fg(if self.focus_index == 0 {
-                        Color::Cyan
+                    .border_style(if self.focus_index == 0 {
+                        Style::default().fg(Color::Rgb(250, 250, 110))
                     } else {
-                        Color::White
-                    }))
-                    .style(Style::default().bg(Color::Black)),
+                        Style::default().fg(Color::Rgb(140, 140, 200))
+                    })
+                    .style(Style::default().bg(Color::Rgb(26, 26, 36))),
             );
         frame.render_widget(first_name_input, left_layout[1]);
 
         // Last Name (required)
         let last_name_input = Paragraph::new(self.last_name.clone())
-            .style(Style::default().bg(Color::Black))
+            .style(
+                Style::default()
+                    .fg(Color::Rgb(220, 220, 240))
+                    .bg(Color::Rgb(26, 26, 36)),
+            )
             .block(
                 Block::default()
                     .borders(Borders::ALL)
-                    .border_type(if self.focus_index == 1 {
-                        BorderType::Thick
-                    } else {
-                        BorderType::Rounded
-                    })
+                    .border_type(BorderType::Rounded)
                     .title(Span::styled(" Last Name* ", required_style))
-                    .border_style(Style::default().fg(if self.focus_index == 1 {
-                        Color::Cyan
+                    .border_style(if self.focus_index == 1 {
+                        Style::default().fg(Color::Rgb(250, 250, 110))
                     } else {
-                        Color::White
-                    }))
-                    .style(Style::default().bg(Color::Black)),
+                        Style::default().fg(Color::Rgb(140, 140, 200))
+                    })
+                    .style(Style::default().bg(Color::Rgb(26, 26, 36))),
             );
         frame.render_widget(last_name_input, left_layout[2]);
 
         // Date of Birth (required)
         let dob_input = Paragraph::new(self.dob.clone())
-            .style(Style::default().bg(Color::Black))
+            .style(
+                Style::default()
+                    .fg(Color::Rgb(220, 220, 240))
+                    .bg(Color::Rgb(26, 26, 36)),
+            )
             .block(
                 Block::default()
                     .borders(Borders::ALL)
-                    .border_type(if self.focus_index == 2 {
-                        BorderType::Thick
-                    } else {
-                        BorderType::Rounded
-                    })
+                    .border_type(BorderType::Rounded)
                     .title(Span::styled(" Date of Birth* ", required_style))
                     .title_alignment(Alignment::Left)
-                    .border_style(Style::default().fg(if self.focus_index == 2 {
-                        Color::Cyan
+                    .border_style(if self.focus_index == 2 {
+                        Style::default().fg(Color::Rgb(250, 250, 110))
                     } else {
-                        Color::White
-                    }))
-                    .style(Style::default().bg(Color::Black)),
+                        Style::default().fg(Color::Rgb(140, 140, 200))
+                    })
+                    .style(Style::default().bg(Color::Rgb(26, 26, 36))),
             );
         frame.render_widget(dob_input, left_layout[3]);
 
@@ -476,180 +483,265 @@ impl Component for AddPatient {
         };
 
         let gender_input = Paragraph::new(gender_text)
-            .style(Style::default().bg(Color::Black))
+            .style(
+                Style::default()
+                    .fg(Color::Rgb(220, 220, 240))
+                    .bg(Color::Rgb(26, 26, 36)),
+            )
             .block(
                 Block::default()
                     .borders(Borders::ALL)
-                    .border_type(if self.focus_index == 3 {
-                        BorderType::Thick
-                    } else {
-                        BorderType::Rounded
-                    })
+                    .border_type(BorderType::Rounded)
                     .title(Span::styled(" Gender* ", required_style))
-                    .border_style(Style::default().fg(if self.focus_index == 3 {
-                        Color::Cyan
+                    .border_style(if self.focus_index == 3 {
+                        Style::default().fg(Color::Rgb(250, 250, 110))
                     } else {
-                        Color::White
-                    }))
-                    .style(Style::default().bg(Color::Black)),
+                        Style::default().fg(Color::Rgb(140, 140, 200))
+                    })
+                    .style(Style::default().bg(Color::Rgb(26, 26, 36))),
             );
         frame.render_widget(gender_input, left_layout[4]);
 
         // Address (required)
         let address_input = Paragraph::new(self.address.clone())
-            .style(Style::default().bg(Color::Black))
+            .style(
+                Style::default()
+                    .fg(Color::Rgb(220, 220, 240))
+                    .bg(Color::Rgb(26, 26, 36)),
+            )
             .block(
                 Block::default()
                     .borders(Borders::ALL)
-                    .border_type(if self.focus_index == 4 {
-                        BorderType::Thick
-                    } else {
-                        BorderType::Rounded
-                    })
+                    .border_type(BorderType::Rounded)
                     .title(Span::styled(" Address* ", required_style))
-                    .border_style(Style::default().fg(if self.focus_index == 4 {
-                        Color::Cyan
+                    .border_style(if self.focus_index == 4 {
+                        Style::default().fg(Color::Rgb(250, 250, 110))
                     } else {
-                        Color::White
-                    }))
-                    .style(Style::default().bg(Color::Black)),
+                        Style::default().fg(Color::Rgb(140, 140, 200))
+                    })
+                    .style(Style::default().bg(Color::Rgb(26, 26, 36))),
             );
         frame.render_widget(address_input, left_layout[5]);
 
         // Phone (required)
         let phone_input = Paragraph::new(self.phone.clone())
-            .style(Style::default().bg(Color::Black))
+            .style(
+                Style::default()
+                    .fg(Color::Rgb(220, 220, 240))
+                    .bg(Color::Rgb(26, 26, 36)),
+            )
             .block(
                 Block::default()
                     .borders(Borders::ALL)
-                    .border_type(if self.focus_index == 5 {
-                        BorderType::Thick
-                    } else {
-                        BorderType::Rounded
-                    })
+                    .border_type(BorderType::Rounded)
                     .title(Span::styled(" Phone* ", required_style))
-                    .border_style(Style::default().fg(if self.focus_index == 5 {
-                        Color::Cyan
+                    .border_style(if self.focus_index == 5 {
+                        Style::default().fg(Color::Rgb(250, 250, 110))
                     } else {
-                        Color::White
-                    }))
-                    .style(Style::default().bg(Color::Black)),
+                        Style::default().fg(Color::Rgb(140, 140, 200))
+                    })
+                    .style(Style::default().bg(Color::Rgb(26, 26, 36))),
             );
         frame.render_widget(phone_input, left_layout[6]);
 
         // Secondary Info Fields (Right Column)
+        let optional_style = Style::default().fg(Color::Rgb(180, 180, 200));
+
         // Email (optional)
         let email_input = Paragraph::new(self.email.clone().unwrap_or_default())
-            .style(Style::default().bg(Color::Black))
+            .style(
+                Style::default()
+                    .fg(Color::Rgb(220, 220, 240))
+                    .bg(Color::Rgb(26, 26, 36)),
+            )
             .block(
                 Block::default()
                     .borders(Borders::ALL)
-                    .border_type(if self.focus_index == 6 {
-                        BorderType::Thick
+                    .border_type(BorderType::Rounded)
+                    .title(Span::styled(" Email (optional) ", optional_style))
+                    .border_style(if self.focus_index == 6 {
+                        Style::default().fg(Color::Rgb(250, 250, 110))
                     } else {
-                        BorderType::Rounded
+                        Style::default().fg(Color::Rgb(140, 140, 200))
                     })
-                    .title(" Email (optional) ")
-                    .border_style(Style::default().fg(if self.focus_index == 6 {
-                        Color::Cyan
-                    } else {
-                        Color::White
-                    }))
-                    .style(Style::default().bg(Color::Black)),
+                    .style(Style::default().bg(Color::Rgb(26, 26, 36))),
             );
         frame.render_widget(email_input, right_layout[1]);
 
         // Medical History (optional) - multi-line
         let history_input = Paragraph::new(self.medical_history.clone().unwrap_or_default())
-            .style(Style::default().bg(Color::Black))
+            .style(
+                Style::default()
+                    .fg(Color::Rgb(220, 220, 240))
+                    .bg(Color::Rgb(26, 26, 36)),
+            )
             .block(
                 Block::default()
                     .borders(Borders::ALL)
-                    .border_type(if self.focus_index == 7 {
-                        BorderType::Thick
+                    .border_type(BorderType::Rounded)
+                    .title(Span::styled(" Medical History (optional) ", optional_style))
+                    .border_style(if self.focus_index == 7 {
+                        Style::default().fg(Color::Rgb(250, 250, 110))
                     } else {
-                        BorderType::Rounded
+                        Style::default().fg(Color::Rgb(140, 140, 200))
                     })
-                    .title(" Medical History (optional) ")
-                    .border_style(Style::default().fg(if self.focus_index == 7 {
-                        Color::Cyan
-                    } else {
-                        Color::White
-                    }))
-                    .style(Style::default().bg(Color::Black)),
+                    .style(Style::default().bg(Color::Rgb(26, 26, 36))),
             )
             .wrap(Wrap { trim: true });
         frame.render_widget(history_input, right_layout[2]);
 
         // Allergies (optional) - multi-line
         let allergies_input = Paragraph::new(self.allergies.clone().unwrap_or_default())
-            .style(Style::default().bg(Color::Black))
+            .style(
+                Style::default()
+                    .fg(Color::Rgb(220, 220, 240))
+                    .bg(Color::Rgb(26, 26, 36)),
+            )
             .block(
                 Block::default()
                     .borders(Borders::ALL)
-                    .border_type(if self.focus_index == 8 {
-                        BorderType::Thick
+                    .border_type(BorderType::Rounded)
+                    .title(Span::styled(" Allergies (optional) ", optional_style))
+                    .border_style(if self.focus_index == 8 {
+                        Style::default().fg(Color::Rgb(250, 250, 110))
                     } else {
-                        BorderType::Rounded
+                        Style::default().fg(Color::Rgb(140, 140, 200))
                     })
-                    .title(" Allergies (optional) ")
-                    .border_style(Style::default().fg(if self.focus_index == 8 {
-                        Color::Cyan
-                    } else {
-                        Color::White
-                    }))
-                    .style(Style::default().bg(Color::Black)),
+                    .style(Style::default().bg(Color::Rgb(26, 26, 36))),
             )
             .wrap(Wrap { trim: true });
         frame.render_widget(allergies_input, right_layout[3]);
 
         // Medications (optional) - multi-line
         let medications_input = Paragraph::new(self.medications.clone().unwrap_or_default())
-            .style(Style::default().bg(Color::Black))
+            .style(
+                Style::default()
+                    .fg(Color::Rgb(220, 220, 240))
+                    .bg(Color::Rgb(26, 26, 36)),
+            )
             .block(
                 Block::default()
                     .borders(Borders::ALL)
-                    .border_type(if self.focus_index == 9 {
-                        BorderType::Thick
+                    .border_type(BorderType::Rounded)
+                    .title(Span::styled(" Medications (optional) ", optional_style))
+                    .border_style(if self.focus_index == 9 {
+                        Style::default().fg(Color::Rgb(250, 250, 110))
                     } else {
-                        BorderType::Rounded
+                        Style::default().fg(Color::Rgb(140, 140, 200))
                     })
-                    .title(" Medications (optional) ")
-                    .border_style(Style::default().fg(if self.focus_index == 9 {
-                        Color::Cyan
-                    } else {
-                        Color::White
-                    }))
-                    .style(Style::default().bg(Color::Black)),
+                    .style(Style::default().bg(Color::Rgb(26, 26, 36))),
             )
             .wrap(Wrap { trim: true });
         frame.render_widget(medications_input, right_layout[4]);
 
-        // Error message area - right after the input fields
+        // Error or success message area
         let status_message = if let Some(success) = &self.success_message {
             Paragraph::new(format!("✓ {}", success))
                 .style(
                     Style::default()
-                        .fg(Color::Green)
+                        .fg(Color::Rgb(140, 219, 140))
                         .add_modifier(Modifier::BOLD)
-                        .bg(Color::Black),
+                        .bg(Color::Rgb(16, 16, 28)),
                 )
                 .alignment(Alignment::Center)
         } else if let Some(error) = &self.error_message {
             Paragraph::new(format!("⚠️ {}", error))
                 .style(
                     Style::default()
-                        .fg(Color::Red)
+                        .fg(Color::Rgb(255, 100, 100))
                         .add_modifier(Modifier::BOLD)
-                        .bg(Color::Black),
+                        .bg(Color::Rgb(16, 16, 28)),
                 )
                 .alignment(Alignment::Center)
         } else {
-            Paragraph::new("").style(Style::default().bg(Color::Black))
+            Paragraph::new("").style(Style::default().bg(Color::Rgb(16, 16, 28)))
         };
         frame.render_widget(status_message, main_layout[3]);
 
-        // CHANGED: Footer with buttons in vertical layout and help text
+        // // Footer with buttons in vertical layout and help text
+        // let footer_layout = Layout::default()
+        //     .direction(Direction::Vertical)
+        //     .constraints([
+        //         Constraint::Length(2), // Submit button
+        //         Constraint::Length(2), // Back button
+        //         Constraint::Min(2),    // Help text
+        //     ])
+        //     .split(main_layout[5]);
+
+        // // Submit button
+        // let submit_block = Block::default()
+        //     .borders(Borders::ALL)
+        //     .border_type(BorderType::Rounded)
+        //     .border_style(if self.focus_index == INPUT_FIELDS {
+        //         Style::default().fg(Color::Rgb(140, 219, 140))
+        //     } else {
+        //         Style::default().fg(Color::Rgb(100, 100, 140))
+        //     })
+        //     .style(Style::default().bg(Color::Rgb(26, 26, 36)));
+
+        // let submit_area = centered_rect(30, 100, footer_layout[0]);
+        // frame.render_widget(submit_block.clone(), submit_area);
+
+        // let submit_inner = submit_block.inner(submit_area);
+        // let submit_text = if self.focus_index == INPUT_FIELDS {
+        //     "► Submit ◄"
+        // } else {
+        //     "  Submit  "
+        // };
+
+        // let submit_style = if self.focus_index == INPUT_FIELDS {
+        //     Style::default()
+        //         .fg(Color::Rgb(140, 219, 140))
+        //         .add_modifier(Modifier::BOLD)
+        // } else {
+        //     Style::default().fg(Color::Rgb(180, 180, 200))
+        // };
+
+        // let submit_button = Paragraph::new(submit_text)
+        //     .style(submit_style)
+        //     .alignment(Alignment::Center);
+        // frame.render_widget(submit_button, submit_inner);
+
+        // // Back button
+        // let back_block = Block::default()
+        //     .borders(Borders::ALL)
+        //     .border_type(BorderType::Rounded)
+        //     .border_style(if self.focus_index == INPUT_FIELDS + 1 {
+        //         Style::default().fg(Color::Rgb(129, 199, 245))
+        //     } else {
+        //         Style::default().fg(Color::Rgb(100, 100, 140))
+        //     })
+        //     .style(Style::default().bg(Color::Rgb(26, 26, 36)));
+
+        // let back_area = centered_rect(30, 100, footer_layout[1]);
+        // frame.render_widget(back_block.clone(), back_area);
+
+        // let back_inner = back_block.inner(back_area);
+        // let back_text = if self.focus_index == INPUT_FIELDS + 1 {
+        //     "► Back ◄"
+        // } else {
+        //     "  Back  "
+        // };
+
+        // let back_style = if self.focus_index == INPUT_FIELDS + 1 {
+        //     Style::default()
+        //         .fg(Color::Rgb(129, 199, 245))
+        //         .add_modifier(Modifier::BOLD)
+        // } else {
+        //     Style::default().fg(Color::Rgb(180, 180, 200))
+        // };
+
+        // let back_button = Paragraph::new(back_text)
+        //     .style(back_style)
+        //     .alignment(Alignment::Center);
+        // frame.render_widget(back_button, back_inner);
+
+        // // Help text
+        // let help_text = Paragraph::new("Tab: Switch Focus | Arrow Keys: Switch Fields | Enter: Submit | Esc: Back\nFor Gender: Type 'M' for Male, 'F' for Female, 'O' for Others")
+        //     .style(Style::default().fg(Color::Rgb(140, 140, 170)).bg(Color::Rgb(16, 16, 28)))
+        //     .alignment(Alignment::Center);
+        // frame.render_widget(help_text, footer_layout[2]);
+        // Footer with buttons in vertical layout and help text
         let footer_layout = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
@@ -659,60 +751,50 @@ impl Component for AddPatient {
             ])
             .split(main_layout[5]);
 
-        // Submit button with active state
+        // Submit button - simple text version
         let submit_text = if self.focus_index == INPUT_FIELDS {
             "► Submit ◄"
         } else {
             "  Submit  "
         };
 
+        let submit_style = if self.focus_index == INPUT_FIELDS {
+            Style::default()
+                .fg(Color::Rgb(140, 219, 140))
+                .add_modifier(Modifier::BOLD)
+        } else {
+            Style::default().fg(Color::Rgb(180, 180, 200))
+        };
+
         let submit_button = Paragraph::new(submit_text)
-            .style(
-                Style::default()
-                    .fg(if self.focus_index == INPUT_FIELDS {
-                        Color::Green
-                    } else {
-                        Color::White
-                    })
-                    .add_modifier(if self.focus_index == INPUT_FIELDS {
-                        Modifier::BOLD
-                    } else {
-                        Modifier::empty()
-                    })
-                    .bg(Color::Black),
-            )
+            .style(submit_style)
             .alignment(Alignment::Center);
         frame.render_widget(submit_button, footer_layout[0]);
 
-        // Back button with active state
+        // Back button - simple text version
         let back_text = if self.focus_index == INPUT_FIELDS + 1 {
             "► Back ◄"
         } else {
             "  Back  "
         };
 
+        let back_style = if self.focus_index == INPUT_FIELDS + 1 {
+            Style::default()
+                .fg(Color::Rgb(129, 199, 245))
+                .add_modifier(Modifier::BOLD)
+        } else {
+            Style::default().fg(Color::Rgb(180, 180, 200))
+        };
+
         let back_button = Paragraph::new(back_text)
-            .style(
-                Style::default()
-                    .fg(if self.focus_index == INPUT_FIELDS + 1 {
-                        Color::Cyan
-                    } else {
-                        Color::Cyan
-                    })
-                    .add_modifier(if self.focus_index == INPUT_FIELDS + 1 {
-                        Modifier::BOLD
-                    } else {
-                        Modifier::empty()
-                    })
-                    .bg(Color::Black),
-            )
+            .style(back_style)
             .alignment(Alignment::Center);
         frame.render_widget(back_button, footer_layout[1]);
 
         // Help text
         let help_text = Paragraph::new("Tab: Switch Focus | Arrow Keys: Switch Fields | Enter: Submit | Esc: Back\nFor Gender: Type 'M' for Male, 'F' for Female, 'O' for Others")
-            .style(Style::default().fg(Color::DarkGray).bg(Color::Black))
-            .alignment(Alignment::Center);
+.style(Style::default().fg(Color::Rgb(140, 140, 170)).bg(Color::Rgb(16, 16, 28)))
+.alignment(Alignment::Center);
         frame.render_widget(help_text, footer_layout[2]);
     }
 }
