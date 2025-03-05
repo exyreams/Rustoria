@@ -1,6 +1,6 @@
 //! Database module for Rustoria.
 
-use crate::models::Patient;
+use crate::models::{Gender, Patient}; // Import Gender here
 use anyhow::{Context, Result};
 use bcrypt::{hash, verify, DEFAULT_COST};
 use rusqlite::{params, Connection};
@@ -106,4 +106,39 @@ pub fn create_patient(patient: &Patient) -> Result<()> {
     )?;
 
     Ok(())
+}
+
+/// Retrieves all patients from the database.
+pub fn get_all_patients() -> Result<Vec<Patient>> {
+    let db_path = Path::new(DB_NAME);
+    let conn = Connection::open(db_path)?;
+
+    let mut stmt = conn.prepare("SELECT id, first_name, last_name, date_of_birth, gender, address, phone_number, email, medical_history, allergies, current_medications FROM patients")?;
+    let patient_iter = stmt.query_map([], |row| {
+        Ok(Patient {
+            id: row.get(0)?,
+            first_name: row.get(1)?,
+            last_name: row.get(2)?,
+            date_of_birth: row.get(3)?,
+            gender: match &*row.get::<_, String>(4)? {
+                "Male" => Gender::Male,
+                "Female" => Gender::Female,
+                "Other" => Gender::Other,
+                _ => Gender::Other, // Or handle the error appropriately
+            },
+            address: row.get(5)?,
+            phone_number: row.get(6)?,
+            email: row.get(7)?,
+            medical_history: row.get(8)?,
+            allergies: row.get(9)?,
+            current_medications: row.get(10)?,
+        })
+    })?;
+
+    let mut patients = Vec::new();
+    for patient_result in patient_iter {
+        patients.push(patient_result?);
+    }
+
+    Ok(patients)
 }

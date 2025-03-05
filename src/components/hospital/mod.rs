@@ -5,13 +5,12 @@ use crate::tui::Frame;
 use anyhow::Result;
 use crossterm::event::KeyEvent;
 
-pub mod patients; // Add this line
+pub mod patients;
 
 // This enum represents the different states within the Hospital module
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HospitalState {
-    Patients, // Add more states later (Staff, Billing, etc.)
-              // Add other states as you add features
+    Patients, // More states later (Staff, Billing, etc.)
 }
 
 pub struct HospitalApp {
@@ -21,9 +20,15 @@ pub struct HospitalApp {
 
 impl HospitalApp {
     pub fn new() -> Self {
+        let mut patients = patients::Patients::new();
+        // Initialize data for the Patients component
+        patients
+            .initialize_list()
+            .expect("Failed to initialize patient list");
+
         Self {
             state: HospitalState::Patients, // Start with the Patients component
-            patients: patients::Patients::new(), // Initialize Patients component
+            patients,                       // Initialize Patients component
         }
     }
 }
