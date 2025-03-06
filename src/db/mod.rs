@@ -151,3 +151,62 @@ pub fn delete_patient(patient_id: i64) -> Result<()> {
 
     Ok(())
 }
+
+/// Updates an existing patient in the database.
+pub fn update_patient(patient: &Patient) -> Result<()> {
+    let db_path = Path::new(DB_NAME);
+    let conn = Connection::open(db_path)?;
+
+    conn.execute(
+        "UPDATE patients SET first_name = ?, last_name = ?, date_of_birth = ?, gender = ?, address = ?, phone_number = ?, email = ?, medical_history = ?, allergies = ?, current_medications = ? WHERE id = ?",
+        params![
+            patient.first_name,
+            patient.last_name,
+            patient.date_of_birth,
+            match patient.gender {
+                crate::models::Gender::Male => "Male",
+                crate::models::Gender::Female => "Female",
+                crate::models::Gender::Other => "Other",
+            },
+            patient.address,
+            patient.phone_number,
+            patient.email,
+            patient.medical_history,
+            patient.allergies,
+            patient.current_medications,
+            patient.id, // The ID is the last parameter for the WHERE clause
+        ],
+    )?;
+
+    Ok(())
+}
+
+/// Retrieves a single patient from the database by ID.
+pub fn get_patient(patient_id: i64) -> Result<Patient> {
+    let db_path = Path::new(DB_NAME);
+    let conn = Connection::open(db_path)?;
+
+    let mut stmt = conn.prepare("SELECT id, first_name, last_name, date_of_birth, gender, address, phone_number, email, medical_history, allergies, current_medications FROM patients WHERE id = ?")?;
+    let patient = stmt.query_row(params![patient_id], |row| {
+        Ok(Patient {
+            id: row.get(0)?,
+            first_name: row.get(1)?,
+            last_name: row.get(2)?,
+            date_of_birth: row.get(3)?,
+            gender: match &*row.get::<_, String>(4)? {
+                "Male" => Gender::Male,
+                "Female" => Gender::Female,
+                "Other" => Gender::Other,
+                _ => Gender::Other, // Or handle the error appropriately
+            },
+            address: row.get(5)?,
+            phone_number: row.get(6)?,
+            email: row.get(7)?,
+            medical_history: row.get(8)?,
+            allergies: row.get(9)?,
+            current_medications: row.get(10)?,
+        })
+    })?;
+
+    Ok(patient)
+}

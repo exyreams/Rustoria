@@ -25,6 +25,8 @@ pub enum SelectedApp {
     PatientList,
     /// Represents the "Delete Patient" functionality.
     PatientDelete,
+    /// Represents the "Delete Patient" functionality.
+    PatientUpdate,
     /// Represents the Hospital application.
     Hospital,
     /// Represents no specific application being selected.
@@ -206,7 +208,8 @@ impl App {
                                     // Add the missing patterns:
                                     SelectedApp::PatientAdd
                                     | SelectedApp::PatientList
-                                    | SelectedApp::PatientDelete => {
+                                    | SelectedApp::PatientDelete
+                                    | SelectedApp::PatientUpdate => {
                                         // These shouldn't be selectable from login screen, but we need to handle them
                                         // You could show an error message or just ignore them
                                         self.login.error_message =
@@ -287,6 +290,19 @@ impl App {
                                         // Transition to Running state with PatientDelete
                                         self.state = AppState::Running(selected_app);
                                     }
+                                    // Add PatientUpdate case
+                                    SelectedApp::PatientUpdate => {
+                                        self.hospital = Some(hospital::HospitalApp::new());
+                                        if let Some(hospital) = &mut self.hospital {
+                                            hospital.set_patients_state(
+                                                hospital::patients::PatientsState::UpdatePatient,
+                                            );
+                                            hospital.patients.update_patient = Some(
+                                                hospital::patients::update::UpdatePatient::new(),
+                                            );
+                                        }
+                                        self.state = AppState::Running(selected_app);
+                                    }
                                     SelectedApp::Hospital => {
                                         // Instantiate HospitalApp when switching to it.
                                         self.hospital = Some(hospital::HospitalApp::new());
@@ -308,7 +324,8 @@ impl App {
                     AppState::Running(selected_app) => match selected_app {
                         SelectedApp::PatientAdd
                         | SelectedApp::PatientList
-                        | SelectedApp::PatientDelete => {
+                        | SelectedApp::PatientDelete
+                        | SelectedApp::PatientUpdate => {
                             // Add PatientDelete here
                             // Handle input in the Hospital component
                             if let Some(hospital) = &mut self.hospital {
@@ -374,7 +391,8 @@ impl App {
             // Render the Hospital component based on the selected sub-application
             AppState::Running(SelectedApp::PatientAdd)
             | AppState::Running(SelectedApp::PatientList)
-            | AppState::Running(SelectedApp::PatientDelete) => {
+            | AppState::Running(SelectedApp::PatientDelete)
+            | AppState::Running(SelectedApp::PatientUpdate) => {
                 // Render the Hospital app if it exists
                 if let Some(hospital) = &self.hospital {
                     hospital.render(frame);

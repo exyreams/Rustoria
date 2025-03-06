@@ -191,9 +191,9 @@ impl Home {
                             },
                             // Patient Management
                             3 => match submenu_idx {
-                                0 => SelectedApp::PatientAdd,  // Add Patient
-                                1 => SelectedApp::PatientList, // List Patients
-                                // 2 => SelectedApp::PatientUpdate,     // Update Patient
+                                0 => SelectedApp::PatientAdd,    // Add Patient
+                                1 => SelectedApp::PatientList,   // List Patients
+                                2 => SelectedApp::PatientUpdate, // Update Patient
                                 3 => SelectedApp::PatientDelete, // Delete Patient
                                 _ => SelectedApp::Hospital,
                             },
