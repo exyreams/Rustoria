@@ -1,4 +1,11 @@
 //! Delete Patient component for the Hospital application.
+//!
+//! This module provides a UI for selecting and deleting patients, with features for:
+//! - Viewing all patients in a tabular format
+//! - Searching patients by various criteria
+//! - Selecting individual or multiple patients for deletion
+//! - Bulk deletion with confirmation
+//! - Feedback on successful or failed operations
 
 use crate::app::SelectedApp;
 use crate::components::Component;
@@ -13,21 +20,39 @@ use ratatui::{
 };
 use std::time::{Duration, Instant};
 
-/// Component to delete patients with bulk delete functionality
+/// Component to delete patients with bulk delete functionality and search capabilities
 pub struct DeletePatient {
+    /// All patients retrieved from the database
     patients: Vec<Patient>,
+    /// Filtered patients based on search criteria
+    filtered_patients: Vec<Patient>,
+    /// Tracks which patients are selected for deletion (indices match filtered_patients)
     selected_patients: Vec<bool>,
+    /// Current search input text
+    search_input: String,
+    /// Whether user is currently in search mode
+    is_searching: bool,
+    /// Table state for tracking selection
     table_state: TableState,
+    /// Whether confirmation dialog is shown
     show_confirmation: bool,
-    confirmation_selected: usize, // 0 for Yes, 1 for No
+    /// Which confirmation button is selected (0 for Yes, 1 for No)
+    confirmation_selected: usize,
+    /// Error message to display, if any
     error_message: Option<String>,
+    /// Success message to display, if any
     success_message: Option<String>,
+    /// Timer for error message display
     error_timer: Option<Instant>,
+    /// Timer for success message display
     success_timer: Option<Instant>,
 }
 
 impl DeletePatient {
     /// Creates a new `DeletePatient` component.
+    ///
+    /// Initializes the component with all patients from the database and
+    /// sets up the initial UI state.
     pub fn new() -> Self {
         let patients = match db::get_all_patients() {
             Ok(p) => p,
@@ -41,7 +66,10 @@ impl DeletePatient {
 
         Self {
             selected_patients: vec![false; patients.len()],
+            filtered_patients: patients.clone(),
             patients,
+            search_input: String::new(),
+            is_searching: false,
             table_state,
             show_confirmation: false,
             confirmation_selected: 1, // Default to "No"
@@ -52,9 +80,61 @@ impl DeletePatient {
         }
     }
 
+    /// Filter patients based on search input.
+    ///
+    /// Updates filtered_patients list and resets selection state appropriately.
+    /// Searches across multiple fields: id, first name, last name, phone, and address.
+    fn filter_patients(&mut self) {
+        if self.search_input.is_empty() {
+            // If search is empty, show all patients
+            self.filtered_patients = self.patients.clone();
+            self.selected_patients = vec![false; self.patients.len()];
+        } else {
+            let search_term = self.search_input.to_lowercase();
+            self.filtered_patients = self
+                .patients
+                .iter()
+                .filter(|p| {
+                    // Case-insensitive search in multiple fields
+                    p.first_name.to_lowercase().contains(&search_term)
+                        || p.last_name.to_lowercase().contains(&search_term)
+                        || p.id.to_string().contains(&search_term)
+                        || p.phone_number.to_lowercase().contains(&search_term)
+                        || p.address.to_lowercase().contains(&search_term)
+                })
+                .cloned()
+                .collect();
+
+            // Reset selected_patients to match filtered list
+            self.selected_patients = vec![false; self.filtered_patients.len()];
+        }
+
+        // Reset selection if it's now out of bounds
+        if let Some(selected) = self.table_state.selected() {
+            if selected >= self.filtered_patients.len() && !self.filtered_patients.is_empty() {
+                self.table_state.select(Some(0));
+            } else if self.filtered_patients.is_empty() {
+                self.table_state.select(None);
+            }
+        }
+    }
+
+    /// Handles input events for the component.
+    ///
+    /// Processes keyboard inputs for navigation, selecting patients,
+    /// searching, and confirming deletion.
+    ///
+    /// # Arguments
+    /// * `key` - The keyboard event to handle
+    ///
+    /// # Returns
+    /// * `Ok(Some(SelectedApp))` - If the app should change screens
+    /// * `Ok(None)` - If no app-level action is needed
+    /// * `Err` - If an error occurred
     fn handle_input(&mut self, key: KeyEvent) -> Result<Option<SelectedApp>> {
         self.check_timeouts();
 
+        // Handle confirmation dialog if it's showing
         if self.show_confirmation {
             match key.code {
                 KeyCode::Left | KeyCode::Right => {
@@ -66,15 +146,22 @@ impl DeletePatient {
                         let mut deleted_count = 0;
                         let mut error_occurred = false;
 
+                        // Get original indices of selected patients
+                        let mut patients_to_delete = Vec::new();
+
                         for (index, checked) in self.selected_patients.iter().enumerate() {
                             if *checked {
-                                let patient_id = self.patients[index].id;
-                                match db::delete_patient(patient_id) {
-                                    Ok(_) => deleted_count += 1,
-                                    Err(_) => {
-                                        error_occurred = true;
-                                        break;
-                                    }
+                                patients_to_delete.push(self.filtered_patients[index].id);
+                            }
+                        }
+
+                        // Delete selected patients
+                        for patient_id in patients_to_delete {
+                            match db::delete_patient(patient_id) {
+                                Ok(_) => deleted_count += 1,
+                                Err(_) => {
+                                    error_occurred = true;
+                                    break;
                                 }
                             }
                         }
@@ -98,12 +185,14 @@ impl DeletePatient {
                         // Refresh patient list
                         if let Ok(patients) = db::get_all_patients() {
                             self.patients = patients;
-                            self.selected_patients = vec![false; self.patients.len()];
-                            if self.patients.is_empty() {
+                            self.filter_patients(); // Re-apply search filter
+
+                            if self.filtered_patients.is_empty() {
                                 self.table_state.select(None);
                             } else if let Some(selected) = self.table_state.selected() {
-                                if selected >= self.patients.len() {
-                                    self.table_state.select(Some(self.patients.len() - 1));
+                                if selected >= self.filtered_patients.len() {
+                                    self.table_state
+                                        .select(Some(self.filtered_patients.len() - 1));
                                 }
                             }
                         }
@@ -119,13 +208,43 @@ impl DeletePatient {
                 }
                 _ => {}
             }
-        } else {
+        }
+        // Handle search input if in search mode
+        else if self.is_searching {
             match key.code {
+                KeyCode::Char(c) => {
+                    self.search_input.push(c);
+                    self.filter_patients();
+                }
+                KeyCode::Backspace => {
+                    self.search_input.pop();
+                    self.filter_patients();
+                }
+                KeyCode::Enter | KeyCode::Down => {
+                    if !self.filtered_patients.is_empty() {
+                        self.is_searching = false;
+                        self.table_state.select(Some(0));
+                    }
+                }
+                KeyCode::Esc => {
+                    self.is_searching = false;
+                }
+                _ => {}
+            }
+        }
+        // Handle normal navigation
+        else {
+            match key.code {
+                KeyCode::Char('/') | KeyCode::Char('s') | KeyCode::Char('S') => {
+                    // Activate search mode
+                    self.is_searching = true;
+                    return Ok(None);
+                }
                 KeyCode::Down => {
-                    if !self.patients.is_empty() {
+                    if !self.filtered_patients.is_empty() {
                         let next = match self.table_state.selected() {
                             Some(i) => {
-                                if i >= self.patients.len() - 1 {
+                                if i >= self.filtered_patients.len() - 1 {
                                     0
                                 } else {
                                     i + 1
@@ -137,11 +256,11 @@ impl DeletePatient {
                     }
                 }
                 KeyCode::Up => {
-                    if !self.patients.is_empty() {
+                    if !self.filtered_patients.is_empty() {
                         let next = match self.table_state.selected() {
                             Some(i) => {
                                 if i == 0 {
-                                    self.patients.len() - 1
+                                    self.filtered_patients.len() - 1
                                 } else {
                                     i - 1
                                 }
@@ -185,6 +304,13 @@ impl DeletePatient {
                         self.selected_patients[i] = !all_selected;
                     }
                 }
+                KeyCode::Char('r') | KeyCode::Char('R') => {
+                    // Refresh patient list
+                    if let Ok(patients) = db::get_all_patients() {
+                        self.patients = patients;
+                        self.filter_patients(); // Re-apply search filter
+                    }
+                }
                 KeyCode::Esc => {
                     // Go back to the main menu
                     return Ok(Some(SelectedApp::None));
@@ -195,21 +321,28 @@ impl DeletePatient {
         Ok(None)
     }
 
+    /// Clears the error message and timer.
     fn clear_error(&mut self) {
         self.error_message = None;
         self.error_timer = None;
     }
 
+    /// Sets an error message and starts the display timer.
+    ///
+    /// # Arguments
+    /// * `message` - The error message to display
     fn set_error(&mut self, message: String) {
         self.error_message = Some(message);
         self.error_timer = Some(Instant::now());
     }
 
+    /// Clears the success message and timer.
     fn clear_success(&mut self) {
         self.success_message = None;
         self.success_timer = None;
     }
 
+    /// Checks if the success message has been displayed long enough and clears it if needed.
     fn check_success_timeout(&mut self) {
         if let Some(timer) = self.success_timer {
             if timer.elapsed() > Duration::from_secs(5) {
@@ -218,6 +351,7 @@ impl DeletePatient {
         }
     }
 
+    /// Checks if the error message has been displayed long enough and clears it if needed.
     fn check_error_timeout(&mut self) {
         if let Some(timer) = self.error_timer {
             if timer.elapsed() > Duration::from_secs(5) {
@@ -226,6 +360,7 @@ impl DeletePatient {
         }
     }
 
+    /// Checks both error and success message timeouts.
     fn check_timeouts(&mut self) {
         self.check_error_timeout();
         self.check_success_timeout();
@@ -233,16 +368,35 @@ impl DeletePatient {
 }
 
 impl Default for DeletePatient {
+    /// Creates a default instance of the DeletePatient component.
     fn default() -> Self {
         Self::new()
     }
 }
 
 impl Component for DeletePatient {
+    /// Handles input events at the component level.
+    ///
+    /// Delegates to the component's own input handler.
+    ///
+    /// # Arguments
+    /// * `event` - The keyboard event to process
+    ///
+    /// # Returns
+    /// * `Ok(Some(SelectedApp))` - If the app should change screens
+    /// * `Ok(None)` - If no app-level action is needed
+    /// * `Err` - If an error occurred
     fn handle_input(&mut self, event: KeyEvent) -> Result<Option<SelectedApp>> {
         self.handle_input(event)
     }
 
+    /// Renders the delete patients component to the frame.
+    ///
+    /// Draws the entire UI including header, search field, patient table,
+    /// help text at the bottom, and confirmation dialog if needed.
+    ///
+    /// # Arguments
+    /// * `frame` - The frame to render the component on
     fn render(&self, frame: &mut Frame) {
         let area = frame.area();
         frame.render_widget(
@@ -250,18 +404,20 @@ impl Component for DeletePatient {
             area,
         );
 
-        // Main delete page rendering with table (always render this first)
+        // Main layout with help text at bottom
         let layout = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
                 Constraint::Length(3), // Header
-                Constraint::Length(3), // Instructions
+                Constraint::Length(3), // Search input
                 Constraint::Min(5),    // Table
                 Constraint::Length(2), // Message area
+                Constraint::Length(3), // Help text (moved to bottom)
             ])
             .margin(1)
             .split(area);
 
+        // Render header with title
         let header_block = Block::default()
             .borders(Borders::BOTTOM)
             .border_style(Style::default().fg(Color::Rgb(75, 75, 120)))
@@ -278,19 +434,45 @@ impl Component for DeletePatient {
             .alignment(Alignment::Center);
         frame.render_widget(title, layout[0]);
 
-        // Instructions
-        let instructions = Paragraph::new(
-            "↑/↓: Navigate   Space: Toggle selection   B: Bulk delete   A: Select/deselect all   Enter: Delete selected   Esc: Back"
-        )
-        .style(Style::default().fg(Color::Rgb(180, 180, 200)))
-        .alignment(Alignment::Center);
-        frame.render_widget(instructions, layout[1]);
+        // Search input field
+        let search_block = Block::default()
+            .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
+            .title(Span::styled(
+                " Search Patients ",
+                Style::default()
+                    .fg(Color::Rgb(230, 230, 250))
+                    .add_modifier(Modifier::BOLD),
+            ))
+            .border_style(if self.is_searching {
+                Style::default().fg(Color::Rgb(250, 250, 110)) // Yellow when active
+            } else {
+                Style::default().fg(Color::Rgb(75, 75, 120))
+            })
+            .style(Style::default().bg(Color::Rgb(22, 22, 35)));
+
+        let search_paragraph = Paragraph::new(self.search_input.clone())
+            .style(
+                Style::default()
+                    .fg(Color::Rgb(220, 220, 240))
+                    .bg(Color::Rgb(22, 22, 35)),
+            )
+            .block(search_block);
+        frame.render_widget(search_paragraph, layout[1]);
 
         // Patient table with checkboxes
         let table_block = Block::default()
             .borders(Borders::ALL)
             .border_type(BorderType::Rounded)
-            .title(" Patients ")
+            .title(if !self.search_input.is_empty() {
+                format!(
+                    " Patients ({} of {} matches) ",
+                    self.filtered_patients.len(),
+                    self.patients.len()
+                )
+            } else {
+                format!(" Patients ({}) ", self.patients.len())
+            })
             .title_style(
                 Style::default()
                     .fg(Color::Rgb(230, 230, 250))
@@ -308,9 +490,9 @@ impl Component for DeletePatient {
             .bg(Color::Rgb(26, 26, 36))
             .fg(Color::Rgb(220, 220, 240));
 
-        // Create table rows
+        // Create table rows - now using filtered_patients
         let mut rows = Vec::new();
-        for (i, patient) in self.patients.iter().enumerate() {
+        for (i, patient) in self.filtered_patients.iter().enumerate() {
             let checkbox = if self.selected_patients[i] {
                 "[✓]"
             } else {
@@ -334,12 +516,17 @@ impl Component for DeletePatient {
             ]));
         }
 
-        if self.patients.is_empty() {
+        if self.filtered_patients.is_empty() {
+            let message = if self.search_input.is_empty() {
+                "No patients found in database"
+            } else {
+                "No patients match your search criteria"
+            };
+
             rows.push(Row::new(vec![
                 Cell::from(""),
                 Cell::from(""),
-                Cell::from("No patients found in database")
-                    .style(Style::default().fg(Color::Rgb(180, 180, 200))),
+                Cell::from(message).style(Style::default().fg(Color::Rgb(180, 180, 200))),
                 Cell::from(""),
                 Cell::from(""),
                 Cell::from(""),
@@ -402,6 +589,37 @@ impl Component for DeletePatient {
                 )
                 .alignment(Alignment::Center);
             frame.render_widget(error_paragraph, layout[3]);
+        }
+
+        // Help text moved to bottom and split into two lines
+        if self.is_searching {
+            let help_text =
+                Paragraph::new("Type to search | ↓/Enter: To results | Esc: Cancel search")
+                    .style(Style::default().fg(Color::Rgb(180, 180, 200)))
+                    .alignment(Alignment::Center);
+            frame.render_widget(help_text, layout[4]);
+        } else {
+            // Split help text into two lines for better readability
+            let help_block = Block::default()
+                .border_style(Style::default().fg(Color::Rgb(75, 75, 120)))
+                .style(Style::default().bg(Color::Rgb(16, 16, 28)));
+
+            let help_layout = Layout::default()
+                .direction(Direction::Vertical)
+                .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
+                .split(layout[4]);
+
+            let help_text1 = Paragraph::new("/ or s: Search | ↑/↓: Navigate | Space: Toggle | A: Select/deselect all | R: Refresh")
+                .style(Style::default().fg(Color::Rgb(180, 180, 200)))
+                .alignment(Alignment::Center);
+
+            let help_text2 = Paragraph::new("Enter: Delete selected | B: Bulk delete | Esc: Back")
+                .style(Style::default().fg(Color::Rgb(180, 180, 200)))
+                .alignment(Alignment::Center);
+
+            frame.render_widget(help_block, layout[4]);
+            frame.render_widget(help_text1, help_layout[0]);
+            frame.render_widget(help_text2, help_layout[1]);
         }
 
         // Confirmation dialog as overlay (without dimming)
