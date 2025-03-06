@@ -31,16 +31,19 @@ enum UpdateState {
 
 /// Component to update an existing patient's information.
 pub struct UpdatePatient {
-    all_patients: Vec<Patient>,    // All patients for selection table
-    table_state: TableState,       // Track which row in the selection table is selected
-    update_state: UpdateState,     // Current component state
-    patient_id_input: String,      // Input for patient ID
-    patient: Patient,              // The patient data being updated
-    loaded: bool,                  // Flag: Has the initial patient data been loaded?
-    selected_field: Option<usize>, // Currently selected field
-    edit_table_state: TableState,  // State for the editing table
-    input_value: String,           // Current value being edited
-    editing: bool,                 // Whether we're currently editing a value
+    all_patients: Vec<Patient>,      // All patients for selection table
+    filtered_patients: Vec<Patient>, // Filtered patients based on search
+    search_input: String,            // Search input text
+    is_searching: bool,              // Whether user is currently typing in search box
+    table_state: TableState,         // Track which row in the selection table is selected
+    update_state: UpdateState,       // Current component state
+    patient_id_input: String,        // Input for patient ID
+    patient: Patient,                // The patient data being updated
+    loaded: bool,                    // Flag: Has the initial patient data been loaded?
+    selected_field: Option<usize>,   // Currently selected field
+    edit_table_state: TableState,    // State for the editing table
+    input_value: String,             // Current value being edited
+    editing: bool,                   // Whether we're currently editing a value
     error_message: Option<String>,
     error_timer: Option<Instant>,
     success_message: Option<String>,
@@ -83,7 +86,10 @@ impl UpdatePatient {
         };
 
         Self {
-            all_patients,
+            all_patients: all_patients.clone(),
+            filtered_patients: all_patients,
+            search_input: String::new(),
+            is_searching: false,
             table_state: selection_state,
             update_state: UpdateState::SelectingPatient,
             patient_id_input: String::new(),
@@ -112,6 +118,35 @@ impl UpdatePatient {
             show_confirmation: false,
             confirmation_message: String::new(),
             confirmed_action: None,
+        }
+    }
+
+    /// Filter patients based on the search term
+    fn filter_patients(&mut self) {
+        if self.search_input.is_empty() {
+            // If search is empty, show all patients
+            self.filtered_patients = self.all_patients.clone();
+        } else {
+            let search_term = self.search_input.to_lowercase();
+            self.filtered_patients = self
+                .all_patients
+                .iter()
+                .filter(|p| {
+                    // Case-insensitive search in multiple fields
+                    p.first_name.to_lowercase().contains(&search_term)
+                        || p.last_name.to_lowercase().contains(&search_term)
+                        || p.id.to_string().contains(&search_term)
+                        || p.phone_number.to_lowercase().contains(&search_term)
+                })
+                .cloned()
+                .collect();
+        }
+
+        // Reset selection if it's now out of bounds
+        if let Some(selected) = self.table_state.selected() {
+            if selected >= self.filtered_patients.len() && !self.filtered_patients.is_empty() {
+                self.table_state.select(Some(0));
+            }
         }
     }
 
@@ -155,8 +190,8 @@ impl UpdatePatient {
     /// Load the currently selected patient from the table
     fn load_selected_patient(&mut self) -> Result<()> {
         if let Some(selected) = self.table_state.selected() {
-            if selected < self.all_patients.len() {
-                let patient_id = self.all_patients[selected].id;
+            if selected < self.filtered_patients.len() {
+                let patient_id = self.filtered_patients[selected].id;
                 self.patient_id_input = patient_id.to_string();
                 return self.load_patient_by_id(patient_id);
             }
@@ -244,7 +279,9 @@ impl UpdatePatient {
 
                 // Refresh the patients list
                 if let Ok(patients) = db::get_all_patients() {
-                    self.all_patients = patients;
+                    self.all_patients = patients.clone();
+                    self.filtered_patients = patients;
+                    self.filter_patients(); // Re-apply any active search filter
                 }
 
                 Ok(())
@@ -314,37 +351,82 @@ impl UpdatePatient {
         // Patient selection state
         if matches!(self.update_state, UpdateState::SelectingPatient) {
             match key.code {
-                KeyCode::Char(c) => {
+                // Search mode handling
+                KeyCode::Char(c) if self.is_searching => {
+                    self.search_input.push(c);
+                    self.filter_patients();
+                    self.clear_error();
+                }
+                KeyCode::Backspace if self.is_searching => {
+                    self.search_input.pop();
+                    self.filter_patients();
+                    self.clear_error();
+                }
+                KeyCode::Down if self.is_searching && !self.filtered_patients.is_empty() => {
+                    // Move from search to results
+                    self.is_searching = false;
+                    self.table_state.select(Some(0));
+                }
+                KeyCode::Esc if self.is_searching => {
+                    // Cancel search
+                    self.is_searching = false;
+                    self.search_input.clear();
+                    self.filter_patients();
+                }
+
+                // Search activation keys
+                KeyCode::Char('/') | KeyCode::Char('s') | KeyCode::Char('S')
+                    if !self.is_searching =>
+                {
+                    self.is_searching = true;
+                }
+
+                // ID input handling (when not searching)
+                KeyCode::Char(c) if !self.is_searching => {
                     self.patient_id_input.push(c);
                     self.input_value = self.patient_id_input.clone();
                     self.clear_error();
                 }
-                KeyCode::Backspace => {
+                KeyCode::Backspace if !self.is_searching => {
                     self.patient_id_input.pop();
                     self.input_value = self.patient_id_input.clone();
                     self.clear_error();
                 }
-                KeyCode::Up => {
+
+                // Navigation in results (when not searching)
+                KeyCode::Up if !self.is_searching => {
                     let selected = self.table_state.selected().unwrap_or(0);
                     if selected > 0 {
                         self.table_state.select(Some(selected - 1));
                     }
                 }
-                KeyCode::Down => {
+                KeyCode::Down if !self.is_searching => {
                     let selected = self.table_state.selected().unwrap_or(0);
-                    if selected < self.all_patients.len().saturating_sub(1) {
+                    if selected < self.filtered_patients.len().saturating_sub(1) {
                         self.table_state.select(Some(selected + 1));
                     }
                 }
+
+                // Selection handling
                 KeyCode::Enter => {
-                    // Try loading the patient from ID input or selected row
-                    if !self.patient_id_input.is_empty() {
-                        let _ = self.load_patient();
-                    } else if !self.all_patients.is_empty() {
-                        let _ = self.load_selected_patient();
+                    if self.is_searching {
+                        // If in search, pressing enter moves to results
+                        if !self.filtered_patients.is_empty() {
+                            self.is_searching = false;
+                            self.table_state.select(Some(0));
+                        }
+                    } else {
+                        // Try loading the patient from ID input or selected row
+                        if !self.patient_id_input.is_empty() {
+                            let _ = self.load_patient();
+                        } else if !self.filtered_patients.is_empty() {
+                            let _ = self.load_selected_patient();
+                        }
                     }
                 }
-                KeyCode::Esc => {
+
+                // Exit
+                KeyCode::Esc if !self.is_searching => {
                     return Ok(Some(PatientAction::BackToHome));
                 }
                 _ => {}
@@ -484,6 +566,7 @@ impl UpdatePatient {
             .direction(Direction::Vertical)
             .constraints([
                 Constraint::Length(3), // Header
+                Constraint::Length(3), // Search input
                 Constraint::Length(3), // Patient ID Input
                 Constraint::Min(10),   // Patient selection table
                 Constraint::Length(1), // Error/Success message
@@ -509,6 +592,32 @@ impl UpdatePatient {
             .alignment(Alignment::Center);
         frame.render_widget(title, main_layout[0]);
 
+        // Search input field
+        let search_block = Block::default()
+            .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
+            .title(Span::styled(
+                " Search Patients ",
+                Style::default()
+                    .fg(Color::Rgb(230, 230, 250))
+                    .add_modifier(Modifier::BOLD),
+            ))
+            .border_style(if self.is_searching {
+                Style::default().fg(Color::Rgb(250, 250, 110)) // Yellow when active
+            } else {
+                Style::default().fg(Color::Rgb(140, 140, 200))
+            })
+            .style(Style::default().bg(Color::Rgb(26, 26, 36)));
+
+        let search_paragraph = Paragraph::new(self.search_input.clone())
+            .style(
+                Style::default()
+                    .fg(Color::Rgb(220, 220, 240))
+                    .bg(Color::Rgb(26, 26, 36)),
+            )
+            .block(search_block);
+        frame.render_widget(search_paragraph, main_layout[1]);
+
         // ID input field
         let id_input_block = Block::default()
             .borders(Borders::ALL)
@@ -519,7 +628,11 @@ impl UpdatePatient {
                     .fg(Color::Rgb(230, 230, 250))
                     .add_modifier(Modifier::BOLD),
             ))
-            .border_style(Style::default().fg(Color::Rgb(250, 250, 110)))
+            .border_style(if !self.is_searching {
+                Style::default().fg(Color::Rgb(250, 250, 110)) // Yellow when active
+            } else {
+                Style::default().fg(Color::Rgb(140, 140, 200))
+            })
             .style(Style::default().bg(Color::Rgb(26, 26, 36)));
 
         let id_input_paragraph = Paragraph::new(self.patient_id_input.clone())
@@ -529,25 +642,30 @@ impl UpdatePatient {
                     .bg(Color::Rgb(26, 26, 36)),
             )
             .block(id_input_block);
-        frame.render_widget(id_input_paragraph, main_layout[1]);
+        frame.render_widget(id_input_paragraph, main_layout[2]);
 
         // Patient selection table
-        if self.all_patients.is_empty() {
-            let no_patients = Paragraph::new("No patients found in database")
-                .style(Style::default().fg(Color::Rgb(220, 220, 240))) // Brighter text
-                .alignment(Alignment::Center);
-            frame.render_widget(no_patients, main_layout[2]);
+        if self.filtered_patients.is_empty() {
+            let no_patients = Paragraph::new(if self.search_input.is_empty() {
+                "No patients found in database"
+            } else {
+                "No patients match your search criteria"
+            })
+            .style(Style::default().fg(Color::Rgb(220, 220, 240)))
+            .alignment(Alignment::Center);
+            frame.render_widget(no_patients, main_layout[3]);
         } else {
             let patients_rows: Vec<Row> = self
-                .all_patients
+                .filtered_patients
                 .iter()
                 .map(|p| {
                     Row::new(vec![
                         p.id.to_string(),
                         p.first_name.clone(),
                         p.last_name.clone(),
+                        p.phone_number.clone(),
                     ])
-                    .style(Style::default().fg(Color::Rgb(220, 220, 240))) // Brighter text for the entire row
+                    .style(Style::default().fg(Color::Rgb(220, 220, 240)))
                     .height(1)
                     .bottom_margin(0)
                 })
@@ -558,19 +676,20 @@ impl UpdatePatient {
                 .bg(Color::Rgb(40, 40, 60))
                 .add_modifier(Modifier::BOLD);
 
-            let header = Row::new(vec!["ID", "First Name", "Last Name"])
+            let header = Row::new(vec!["ID", "First Name", "Last Name", "Phone"])
                 .style(
                     Style::default()
-                        .fg(Color::Rgb(180, 180, 220))
+                        .fg(Color::Rgb(220, 220, 240))
                         .bg(Color::Rgb(80, 60, 130))
                         .add_modifier(Modifier::BOLD),
                 )
                 .height(1);
 
             let widths = [
-                Constraint::Percentage(20),
-                Constraint::Percentage(40),
-                Constraint::Percentage(40),
+                Constraint::Percentage(15),
+                Constraint::Percentage(30),
+                Constraint::Percentage(30),
+                Constraint::Percentage(25),
             ];
 
             let patients_table = Table::new(patients_rows, widths)
@@ -579,16 +698,17 @@ impl UpdatePatient {
                     Block::default()
                         .borders(Borders::ALL)
                         .border_type(BorderType::Rounded)
-                        .title(" Patients ")
+                        .title(format!(" Patients ({}) ", self.filtered_patients.len()))
                         .border_style(Style::default().fg(Color::Rgb(140, 140, 200)))
                         .style(Style::default().bg(Color::Rgb(26, 26, 36))),
                 )
+                .column_spacing(2)
                 .row_highlight_style(selected_style)
                 .highlight_symbol("► ");
 
             frame.render_stateful_widget(
                 patients_table,
-                main_layout[2],
+                main_layout[3],
                 &mut self.table_state.clone(),
             );
         }
@@ -602,7 +722,7 @@ impl UpdatePatient {
                         .add_modifier(Modifier::BOLD),
                 )
                 .alignment(Alignment::Center);
-            frame.render_widget(error_paragraph, main_layout[3]);
+            frame.render_widget(error_paragraph, main_layout[4]);
         } else if let Some(success) = &self.success_message {
             let success_paragraph = Paragraph::new(success.as_str())
                 .style(
@@ -611,15 +731,20 @@ impl UpdatePatient {
                         .add_modifier(Modifier::BOLD),
                 )
                 .alignment(Alignment::Center);
-            frame.render_widget(success_paragraph, main_layout[3]);
+            frame.render_widget(success_paragraph, main_layout[4]);
         }
 
         // Help text
-        let help_text = "Enter ID or select patient with ↑/↓ | Enter: Load Patient | Esc: Back";
+        let help_text = if self.is_searching {
+            "Type to search | ↓: To results | Esc: Cancel search"
+        } else {
+            "/ or s: Search | ↑/↓: Navigate patients | Enter: Select patient | Esc: Back"
+        };
+
         let help_paragraph = Paragraph::new(help_text)
-            .style(Style::default().fg(Color::Rgb(220, 220, 240))) // Brighter text
+            .style(Style::default().fg(Color::Rgb(220, 220, 240)))
             .alignment(Alignment::Center);
-        frame.render_widget(help_paragraph, main_layout[4]);
+        frame.render_widget(help_paragraph, main_layout[5]);
     }
 
     /// Render the patient editing screen with data table and input field
@@ -672,7 +797,6 @@ impl UpdatePatient {
         let allergies_str = self.patient.allergies.clone().unwrap_or_default();
         let medications_str = self.patient.current_medications.clone().unwrap_or_default();
 
-        // Create cells with brighter text color
         let table_items = vec![
             Row::new(vec!["ID", &id_str])
                 .style(Style::default().fg(Color::Rgb(220, 220, 240)))
@@ -728,7 +852,7 @@ impl UpdatePatient {
         let header = Row::new(vec!["Field", "Value"])
             .style(
                 Style::default()
-                    .fg(Color::Rgb(180, 180, 220))
+                    .fg(Color::Rgb(220, 220, 240))
                     .bg(Color::Rgb(80, 60, 130))
                     .add_modifier(Modifier::BOLD),
             )
@@ -746,6 +870,7 @@ impl UpdatePatient {
                     .border_style(Style::default().fg(Color::Rgb(140, 140, 200)))
                     .style(Style::default().bg(Color::Rgb(26, 26, 36))),
             )
+            .column_spacing(2)
             .row_highlight_style(selected_style)
             .highlight_symbol("► ");
 
@@ -820,7 +945,7 @@ impl UpdatePatient {
         };
 
         let help_paragraph = Paragraph::new(help_text)
-            .style(Style::default().fg(Color::Rgb(220, 220, 240))) // Brighter text
+            .style(Style::default().fg(Color::Rgb(220, 220, 240)))
             .alignment(Alignment::Center);
         frame.render_widget(help_paragraph, main_layout[4]);
     }
@@ -846,12 +971,12 @@ impl UpdatePatient {
             .split(dialog_area);
 
         let message = Paragraph::new(self.confirmation_message.as_str())
-            .style(Style::default().fg(Color::Rgb(220, 220, 240))) // Brighter text
+            .style(Style::default().fg(Color::Rgb(220, 220, 240)))
             .alignment(Alignment::Center);
         frame.render_widget(message, dialog_layout[0]);
 
         let choices = Paragraph::new("Y: Yes | N: No")
-            .style(Style::default().fg(Color::Rgb(220, 220, 240))) // Brighter text
+            .style(Style::default().fg(Color::Rgb(220, 220, 240)))
             .alignment(Alignment::Center);
         frame.render_widget(choices, dialog_layout[1]);
     }
