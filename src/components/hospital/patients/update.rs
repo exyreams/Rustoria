@@ -562,6 +562,7 @@ impl UpdatePatient {
                 .style(
                     Style::default()
                         .fg(Color::Rgb(180, 180, 220))
+                        .bg(Color::Rgb(80, 60, 130))
                         .add_modifier(Modifier::BOLD),
                 )
                 .height(1);
@@ -728,6 +729,7 @@ impl UpdatePatient {
             .style(
                 Style::default()
                     .fg(Color::Rgb(180, 180, 220))
+                    .bg(Color::Rgb(80, 60, 130))
                     .add_modifier(Modifier::BOLD),
             )
             .height(1);
