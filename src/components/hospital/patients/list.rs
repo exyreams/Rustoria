@@ -354,7 +354,7 @@ impl Component for ListPatients {
             let error_paragraph = Paragraph::new(error.as_str())
                 .style(Style::default().fg(Color::Red).add_modifier(Modifier::BOLD))
                 .alignment(Alignment::Center);
-            frame.render_widget(error_paragraph, layout[4]); // Render in the last section
+            frame.render_widget(error_paragraph, layout[4]);
         }
     }
 }
