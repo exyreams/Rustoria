@@ -205,7 +205,7 @@ impl Home {
                             },
                             // Staff Scheduling
                             5 => match submenu_idx {
-                                // 0 => SelectedApp::StaffAdd,          // Add Staff
+                                0 => SelectedApp::StaffAdd, // Add Staff
                                 // 1 => SelectedApp::StaffAssign,       // Assign Shift
                                 // 2 => SelectedApp::StaffList,         // List Staff
                                 // 3 => SelectedApp::StaffRemove,       // Remove Staff
@@ -474,7 +474,7 @@ impl Component for Home {
             .collect();
 
         let submenu_list = List::new(submenu_items)
-            .block(Block::default().padding(Padding::new(2, 0, 2, 0))) // Added top padding
+            .block(Block::default().padding(Padding::new(2, 0, 2, 0)))
             .highlight_style(
                 Style::default()
                     .bg(Color::Rgb(40, 40, 65))

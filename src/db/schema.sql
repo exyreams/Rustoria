@@ -21,3 +21,13 @@ CREATE TABLE IF NOT EXISTS patients (
    allergies TEXT,
    current_medications TEXT
 );
+
+-- Create the staff table
+CREATE TABLE IF NOT EXISTS staff (
+   id INTEGER PRIMARY KEY,
+   name TEXT NOT NULL,
+   role TEXT NOT NULL,
+   phone_number TEXT NOT NULL,
+   email TEXT,
+   address TEXT NOT NULL
+);

@@ -4,13 +4,15 @@
 //! providing top-level navigation and management of the hospital's
 //! functionalities, specifically the patient management system.
 
-use crate::components::hospital::patients::PatientsState;
+use self::patients::PatientsState;
+use self::staff::Staff;
 use crate::components::Component;
 use crate::tui::Frame;
 use anyhow::Result;
 use crossterm::event::KeyEvent;
 
 pub mod patients;
+pub mod staff;
 
 /// Enum representing the different states of the Hospital application.
 ///
@@ -20,6 +22,8 @@ pub mod patients;
 pub enum HospitalState {
     /// Represents the Patients section of the hospital application.
     Patients,
+    /// Represents the Staff Scheduling section of the hospital application.
+    Staff,
 }
 
 /// Struct representing the main Hospital application.
@@ -29,9 +33,11 @@ pub enum HospitalState {
 /// the UI.
 pub struct HospitalApp {
     /// The current state of the hospital application.
-    state: HospitalState,
+    pub state: HospitalState,
     /// The patients component, which handles patient-related functionalities.
     pub patients: patients::Patients,
+    /// The patients component, which handles patient-related functionalities.
+    pub staff: Staff,
 }
 
 impl HospitalApp {
@@ -55,6 +61,7 @@ impl HospitalApp {
             state: HospitalState::Patients,
             // Store the initialized Patients component
             patients,
+            staff: Staff::new(),
         }
     }
     /// Sets the state of the `Patients` component.
@@ -77,6 +84,11 @@ impl HospitalApp {
                 eprintln!("Error initializing patient list: {}", e);
             }
         }
+    }
+
+    /// Sets the current hospital application state.
+    pub fn set_state(&mut self, new_state: HospitalState) {
+        self.state = new_state;
     }
 }
 
@@ -105,6 +117,13 @@ impl Component for HospitalApp {
                     return Ok(Some(action)); // Directly return any action from Patients
                 }
             }
+            HospitalState::Staff => {
+                // Delegate input handling to the Staff component
+                if let Some(action) = self.staff.handle_input(event)? {
+                    // Return any action returned by the Staff component
+                    return Ok(Some(action)); // Directly return any action from Staff
+                }
+            }
         }
         // If no action is taken, return None
         Ok(None)
@@ -122,6 +141,7 @@ impl Component for HospitalApp {
         match self.state {
             // Render the Patients component when in the Patients state
             HospitalState::Patients => self.patients.render(frame),
+            HospitalState::Staff => self.staff.render(frame),
         }
     }
 }

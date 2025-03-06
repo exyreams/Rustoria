@@ -1,6 +1,6 @@
 //! Database module for Rustoria.
 
-use crate::models::{Gender, Patient};
+use crate::models::{Gender, Patient, StaffMember, StaffRole};
 use anyhow::{Context, Result};
 use bcrypt::{hash, verify, DEFAULT_COST};
 use rusqlite::{params, Connection};
@@ -209,4 +209,28 @@ pub fn get_patient(patient_id: i64) -> Result<Patient> {
     })?;
 
     Ok(patient)
+}
+
+/// Creates a new staff member in the database.
+pub fn create_staff_member(staff_member: &StaffMember) -> Result<()> {
+    let db_path = Path::new(DB_NAME);
+    let conn = Connection::open(db_path)?;
+    conn.execute(
+        "INSERT INTO staff (name, role, phone_number, email, address) VALUES (?, ?, ?, ?, ?)",
+        params![
+            staff_member.name,
+            match staff_member.role {
+                // Convert StaffRole to String for database storage
+                StaffRole::Doctor => "Doctor",
+                StaffRole::Nurse => "Nurse",
+                StaffRole::Admin => "Admin",
+                StaffRole::Technician => "Technician",
+            },
+            staff_member.phone_number,
+            staff_member.email,
+            staff_member.address,
+        ],
+    )?;
+
+    Ok(())
 }

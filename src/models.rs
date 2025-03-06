@@ -1,7 +1,7 @@
 //! Data models for Rustoria.
 //!
 //! This module defines the core data structures used in the Rustoria hospital management system.
-//! It includes entities such as patients, with serialization support for database operations
+//! It includes entities such as patients, staff members, with serialization support for database operations
 //! and API communications.
 
 use serde::{Deserialize, Serialize}; // Import
@@ -48,4 +48,40 @@ pub struct Patient {
     pub allergies: Option<String>,
     /// Medications the patient is currently taking
     pub current_medications: Option<String>,
+}
+
+/// Represents the role of a staff member within the hospital.
+///
+/// Different roles have different responsibilities and access permissions
+/// within the hospital management system.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum StaffRole {
+    /// Medical doctor responsible for patient diagnosis and treatment
+    Doctor,
+    /// Nursing staff responsible for patient care
+    Nurse,
+    /// Administrative personnel managing hospital operations
+    Admin,
+    /// Technical staff operating and maintaining medical equipment
+    Technician,
+}
+
+/// Represents a staff member in the hospital management system.
+///
+/// Contains personal and professional information necessary for
+/// identification and communication within the hospital system.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StaffMember {
+    /// Unique identifier for the staff member
+    pub id: i64,
+    /// Staff member's full name
+    pub name: String,
+    /// Professional role within the hospital
+    pub role: StaffRole,
+    /// Contact phone number
+    pub phone_number: String,
+    /// Email address, if available
+    pub email: Option<String>,
+    /// Residential or mailing address
+    pub address: String,
 }
