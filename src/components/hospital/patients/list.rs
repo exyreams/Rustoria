@@ -424,9 +424,8 @@ impl Component for ListPatients {
         .iter()
         .map(|h| Cell::from(*h).style(Style::default().fg(Color::Rgb(230, 230, 250))));
         let header = Row::new(header_cells)
-            .style(Style::default().bg(Color::Rgb(26, 26, 36)))
-            .height(1)
-            .bottom_margin(1);
+            .style(Style::default().bg(Color::Rgb(80, 60, 130)))
+            .height(1);
 
         // Map the patient data to table rows - now using filtered_patients
         let rows = self.filtered_patients.iter().map(|patient| {

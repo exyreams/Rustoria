@@ -559,7 +559,11 @@ impl Component for DeletePatient {
                 Cell::from("Phone").style(Style::default().add_modifier(Modifier::BOLD)),
                 Cell::from("Address").style(Style::default().add_modifier(Modifier::BOLD)),
             ])
-            .style(Style::default().fg(Color::Rgb(180, 180, 250)))
+            .style(
+                Style::default()
+                    .bg(Color::Rgb(80, 60, 130))
+                    .fg(Color::Rgb(180, 180, 250)),
+            )
             .height(1),
         )
         .block(table_block)
