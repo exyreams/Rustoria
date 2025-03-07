@@ -442,19 +442,17 @@ impl Component for ListPatients {
                 Cell::from(patient.phone_number.clone()),
                 Cell::from(patient.address.clone()),
             ];
-            Row::new(cells).height(1).bottom_margin(0)
+            Row::new(cells)
+                .height(1)
+                .bottom_margin(0)
+                .style(Style::default().fg(Color::Rgb(220, 220, 240)))
         });
 
         // Create the table widget with highlight style based on focus
-        let table_highlight_style = if self.focus_index == PATIENT_LIST {
-            Style::default()
-                .bg(Color::Rgb(40, 40, 65))
-                .add_modifier(Modifier::BOLD)
-        } else {
-            Style::default()
-                .bg(Color::Rgb(30, 30, 45))
-                .add_modifier(Modifier::BOLD)
-        };
+        let selected_style = Style::default()
+            .fg(Color::Rgb(250, 250, 110))
+            .bg(Color::Rgb(40, 40, 60))
+            .add_modifier(Modifier::BOLD);
 
         // Create a title that includes the number of results if search is active
         let table_title = if !self.search_input.is_empty() {
@@ -489,7 +487,7 @@ impl Component for ListPatients {
                 .border_style(Style::default().fg(Color::Rgb(75, 75, 120)))
                 .style(Style::default().bg(Color::Rgb(22, 22, 35))),
         )
-        .row_highlight_style(table_highlight_style)
+        .row_highlight_style(selected_style)
         .highlight_symbol(if self.focus_index == PATIENT_LIST {
             "► "
         } else {
