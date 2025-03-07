@@ -1,4 +1,8 @@
 //! Home component for Rustoria.
+//!
+//! This module defines the home screen component, which provides the main interface for navigating the application's features.
+//! It includes UI elements such as feature lists, submenus, and a logout confirmation dialog.
+//! It handles user input for navigation, menu selection, and logout actions.
 
 use crate::app::SelectedApp;
 use crate::components::Component;
@@ -68,7 +72,13 @@ impl Home {
             // Reports & Analytics
             vec!["Generate Report", "Export Reports"],
             // Staff Scheduling
-            vec!["Add Staff", "Assign Shift", "List Staff", "Remove Staff"],
+            vec![
+                "Add Staff",
+                "Assign Shift",
+                "Delete Staff",
+                "List Staff",
+                "Update Staff",
+            ],
         ];
 
         // Initialize submenu states for each feature
@@ -93,6 +103,14 @@ impl Home {
     }
 
     /// Loads the username from the database.
+    ///
+    /// # Arguments
+    ///
+    /// * `user_id` - The ID of the user whose username should be loaded.
+    ///
+    /// # Returns
+    ///
+    /// * `Result<()>` - Returns `Ok(())` if the username is loaded successfully, or an error if there's a database issue.
     pub fn load_username(&mut self, user_id: i64) -> Result<()> {
         self.username = Some(db::get_username(user_id)?);
         Ok(())
@@ -218,9 +236,9 @@ impl Home {
                             5 => match submenu_idx {
                                 0 => SelectedApp::StaffAdd, // Add Staff
                                 // 1 => SelectedApp::StaffAssign,       // Assign Shift
-                                2 => SelectedApp::StaffList, // List Staff
-                                // 3 => SelectedApp::StaffRemove,       // Delete Staff
-                                // 3 => SelectedApp::StaffUpdate,       // Update Staff
+                                2 => SelectedApp::StaffDelete, // Delete Staff
+                                3 => SelectedApp::StaffList,   // List Staff
+                                4 => SelectedApp::StaffUpdate, // Update Staff
                                 _ => SelectedApp::Hospital,
                             },
                             _ => SelectedApp::Hospital,

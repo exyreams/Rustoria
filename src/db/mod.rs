@@ -5,9 +5,9 @@
 //! patients, and staff members.
 
 use crate::models::{Gender, Patient, StaffMember, StaffRole};
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
 use bcrypt::{hash, verify, DEFAULT_COST};
-use rusqlite::{params, Connection};
+use rusqlite::{params, Connection, OptionalExtension};
 use std::path::Path;
 
 /// The name of the database file.
@@ -82,7 +82,7 @@ pub fn authenticate_user(username: &str, password: &str) -> Result<i64> {
     if verify(password, &stored_hash).context("Failed to verify password")? {
         Ok(user_id)
     } else {
-        Err(anyhow::anyhow!("Invalid credentials"))
+        Err(anyhow!("Invalid credentials"))
     }
 }
 
@@ -140,20 +140,8 @@ pub fn get_username(user_id: i64) -> Result<String> {
 }
 
 /// Creates a new patient in the database.
-///
-/// # Arguments
-///
-/// * `patient` - A reference to the `Patient` struct containing patient data.
-///
-/// # Errors
-///
-/// Returns an error if the database operation fails.
 pub fn create_patient(patient: &Patient) -> Result<()> {
-    // Open the database connection
-    let db_path = Path::new(DB_NAME);
-    let conn = Connection::open(db_path)?;
-
-    // Execute the SQL query to insert the new patient
+    let conn = Connection::open(DB_NAME)?;
     conn.execute(
         "INSERT INTO patients (first_name, last_name, date_of_birth, gender, address, phone_number, email, medical_history, allergies, current_medications) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         params![
@@ -161,9 +149,9 @@ pub fn create_patient(patient: &Patient) -> Result<()> {
             patient.last_name,
             patient.date_of_birth,
             match patient.gender {
-                crate::models::Gender::Male => "Male",
-                crate::models::Gender::Female => "Female",
-                crate::models::Gender::Other => "Other",
+                Gender::Male => "Male",
+                Gender::Female => "Female",
+                Gender::Other => "Other",
             },
             patient.address,
             patient.phone_number,
@@ -173,24 +161,14 @@ pub fn create_patient(patient: &Patient) -> Result<()> {
             patient.current_medications,
         ],
     )?;
-
     Ok(())
 }
 
 /// Retrieves all patients from the database.
-///
-/// # Returns
-///
-/// Returns a `Result<Vec<Patient>>` containing a vector of `Patient` structs
-/// if successful, or an error if the database operation fails.
 pub fn get_all_patients() -> Result<Vec<Patient>> {
-    // Open the database connection
-    let db_path = Path::new(DB_NAME);
-    let conn = Connection::open(db_path)?;
-
-    // Prepare the SQL query to select all patients
+    let conn = Connection::open(DB_NAME)?;
     let mut stmt = conn.prepare("SELECT id, first_name, last_name, date_of_birth, gender, address, phone_number, email, medical_history, allergies, current_medications FROM patients")?;
-    // Execute the query and map the results to Patient structs
+
     let patient_iter = stmt.query_map([], |row| {
         Ok(Patient {
             id: row.get(0)?,
@@ -201,7 +179,13 @@ pub fn get_all_patients() -> Result<Vec<Patient>> {
                 "Male" => Gender::Male,
                 "Female" => Gender::Female,
                 "Other" => Gender::Other,
-                _ => Gender::Other,
+                _ => {
+                    return Err(rusqlite::Error::InvalidColumnType(
+                        4,
+                        String::from("Invalid gender value"),
+                        rusqlite::types::Type::Text,
+                    ))
+                }
             },
             address: row.get(5)?,
             phone_number: row.get(6)?,
@@ -211,8 +195,6 @@ pub fn get_all_patients() -> Result<Vec<Patient>> {
             current_medications: row.get(10)?,
         })
     })?;
-
-    // Collect the patient data into a vector
     let mut patients = Vec::new();
     for patient_result in patient_iter {
         patients.push(patient_result?);
@@ -221,51 +203,56 @@ pub fn get_all_patients() -> Result<Vec<Patient>> {
     Ok(patients)
 }
 
-/// Deletes a patient from the database by ID.
-///
-/// # Arguments
-///
-/// * `patient_id` - The ID of the patient to delete.
-///
-/// # Errors
-///
-/// Returns an error if the database operation fails.
-pub fn delete_patient(patient_id: i64) -> Result<()> {
-    // Open the database connection
-    let db_path = Path::new(DB_NAME);
-    let conn = Connection::open(db_path)?;
+/// Retrieves a single patient by their ID.
+pub fn get_patient(patient_id: i64) -> Result<Patient> {
+    let conn = Connection::open(DB_NAME)?;
+    let mut stmt = conn.prepare("SELECT id, first_name, last_name, date_of_birth, gender, address, phone_number, email, medical_history, allergies, current_medications FROM patients WHERE id = ?")?;
 
-    // Execute the SQL query to delete the patient
-    conn.execute("DELETE FROM patients WHERE id = ?", params![patient_id])?;
+    let patient: Option<Patient> = stmt
+        .query_row(params![patient_id], |row| {
+            Ok(Patient {
+                id: row.get(0)?,
+                first_name: row.get(1)?,
+                last_name: row.get(2)?,
+                date_of_birth: row.get(3)?,
+                gender: match &*row.get::<_, String>(4)? {
+                    "Male" => Gender::Male,
+                    "Female" => Gender::Female,
+                    "Other" => Gender::Other,
+                    _ => {
+                        return Err(rusqlite::Error::InvalidColumnType(
+                            4,
+                            String::from("Invalid gender value"),
+                            rusqlite::types::Type::Text,
+                        ))
+                    }
+                },
+                address: row.get(5)?,
+                phone_number: row.get(6)?,
+                email: row.get(7)?,
+                medical_history: row.get(8)?,
+                allergies: row.get(9)?,
+                current_medications: row.get(10)?,
+            })
+        })
+        .optional()?;
 
-    Ok(())
+    patient.ok_or_else(|| anyhow!("Patient not found")) // Use the custom error
 }
 
 /// Updates an existing patient in the database.
-///
-/// # Arguments
-///
-/// * `patient` - A reference to the `Patient` struct containing the updated patient data.
-///
-/// # Errors
-///
-/// Returns an error if the database operation fails.
 pub fn update_patient(patient: &Patient) -> Result<()> {
-    // Open the database connection
-    let db_path = Path::new(DB_NAME);
-    let conn = Connection::open(db_path)?;
-
-    // Execute the SQL query to update the patient
+    let conn = Connection::open(DB_NAME)?;
     conn.execute(
         "UPDATE patients SET first_name = ?, last_name = ?, date_of_birth = ?, gender = ?, address = ?, phone_number = ?, email = ?, medical_history = ?, allergies = ?, current_medications = ? WHERE id = ?",
         params![
             patient.first_name,
             patient.last_name,
             patient.date_of_birth,
-            match patient.gender {
-                crate::models::Gender::Male => "Male",
-                crate::models::Gender::Female => "Female",
-                crate::models::Gender::Other => "Other",
+           match patient.gender {
+                Gender::Male => "Male",
+                Gender::Female => "Female",
+                Gender::Other => "Other",
             },
             patient.address,
             patient.phone_number,
@@ -273,76 +260,27 @@ pub fn update_patient(patient: &Patient) -> Result<()> {
             patient.medical_history,
             patient.allergies,
             patient.current_medications,
-            patient.id, // The ID is the last parameter for the WHERE clause
+            patient.id,
         ],
     )?;
-
     Ok(())
 }
 
-/// Retrieves a single patient from the database by ID.
-///
-/// # Arguments
-///
-/// * `patient_id` - The ID of the patient to retrieve.
-///
-/// # Returns
-///
-/// Returns a `Result<Patient>` containing the `Patient` struct if found,
-/// or an error if the patient is not found or the database operation fails.
-pub fn get_patient(patient_id: i64) -> Result<Patient> {
-    // Open the database connection
-    let db_path = Path::new(DB_NAME);
-    let conn = Connection::open(db_path)?;
-
-    // Prepare the SQL query to select the patient by ID
-    let mut stmt = conn.prepare("SELECT id, first_name, last_name, date_of_birth, gender, address, phone_number, email, medical_history, allergies, current_medications FROM patients WHERE id = ?")?;
-    // Execute the query and map the result to a Patient struct
-    let patient = stmt.query_row(params![patient_id], |row| {
-        Ok(Patient {
-            id: row.get(0)?,
-            first_name: row.get(1)?,
-            last_name: row.get(2)?,
-            date_of_birth: row.get(3)?,
-            gender: match &*row.get::<_, String>(4)? {
-                "Male" => Gender::Male,
-                "Female" => Gender::Female,
-                "Other" => Gender::Other,
-                _ => Gender::Other, // Or handle the error appropriately
-            },
-            address: row.get(5)?,
-            phone_number: row.get(6)?,
-            email: row.get(7)?,
-            medical_history: row.get(8)?,
-            allergies: row.get(9)?,
-            current_medications: row.get(10)?,
-        })
-    })?;
-
-    Ok(patient)
+/// Deletes a patient record from the database by their ID.
+pub fn delete_patient(patient_id: i64) -> Result<()> {
+    let conn = Connection::open(DB_NAME)?;
+    conn.execute("DELETE FROM patients WHERE id = ?", params![patient_id])?;
+    Ok(())
 }
 
 /// Creates a new staff member in the database.
-///
-/// # Arguments
-///
-/// * `staff_member` - A reference to the `StaffMember` struct containing the staff member data.
-///
-/// # Errors
-///
-/// Returns an error if the database operation fails.
 pub fn create_staff_member(staff_member: &StaffMember) -> Result<()> {
-    // Open the database connection
-    let db_path = Path::new(DB_NAME);
-    let conn = Connection::open(db_path)?;
-
-    // Execute the SQL query to insert the new staff member
+    let conn = Connection::open(DB_NAME)?;
     conn.execute(
         "INSERT INTO staff (name, role, phone_number, email, address) VALUES (?, ?, ?, ?, ?)",
         params![
             staff_member.name,
             match staff_member.role {
-                // Convert StaffRole to String for database storage
                 StaffRole::Doctor => "Doctor",
                 StaffRole::Nurse => "Nurse",
                 StaffRole::Admin => "Admin",
@@ -353,29 +291,53 @@ pub fn create_staff_member(staff_member: &StaffMember) -> Result<()> {
             staff_member.address,
         ],
     )?;
-
     Ok(())
 }
 
-/// Retrieves all staff member records from the database.
-///
-/// # Returns
-///
-/// Returns a `Result<Vec<StaffMember>>` containing a vector of `StaffMember` structs
-/// if successful, or an error if the database operation fails.
+/// Retrieves all staff members from the database.
 pub fn get_all_staff() -> Result<Vec<StaffMember>> {
-    // Open the database connection
-    let conn = Connection::open("./rustoria.db")?;
+    let conn = Connection::open(DB_NAME)?;
+    let mut stmt =
+        conn.prepare("SELECT id, name, role, phone_number, email, address FROM staff")?;
+    let staff_iter = stmt.query_map([], |row| {
+        Ok(StaffMember {
+            id: row.get(0)?,
+            name: row.get(1)?,
+            role: match row.get::<_, String>(2)?.as_str() {
+                "Doctor" => StaffRole::Doctor,
+                "Nurse" => StaffRole::Nurse,
+                "Admin" => StaffRole::Admin,
+                "Technician" => StaffRole::Technician,
+                _ => {
+                    return Err(rusqlite::Error::InvalidColumnType(
+                        // Correct error handling
+                        2, // Index of the 'role' column
+                        String::from("Invalid role value"),
+                        rusqlite::types::Type::Text,
+                    ));
+                }
+            },
+            phone_number: row.get(3)?,
+            email: row.get(4)?,
+            address: row.get(5)?,
+        })
+    })?;
 
-    // Prepare the SQL query to select all staff members
-    let mut stmt = conn.prepare(
-        "SELECT id, name, role, phone_number, email, address
-         FROM staff",
-    )?;
+    let mut staff = Vec::new();
+    for staff_member in staff_iter {
+        staff.push(staff_member?);
+    }
+    Ok(staff)
+}
 
-    // Execute the query and map the results to StaffMember structs
-    let staff = stmt
-        .query_map([], |row| {
+/// Retrieves a single staff member by their ID.
+pub fn get_staff(staff_id: i64) -> Result<StaffMember> {
+    let conn = Connection::open(DB_NAME)?;
+    let mut stmt = conn
+        .prepare("SELECT id, name, role, phone_number, email, address FROM staff WHERE id = ?")?;
+
+    let staff_member: Option<StaffMember> = stmt
+        .query_row(params![staff_id], |row| {
             Ok(StaffMember {
                 id: row.get(0)?,
                 name: row.get(1)?,
@@ -384,13 +346,50 @@ pub fn get_all_staff() -> Result<Vec<StaffMember>> {
                     "Nurse" => StaffRole::Nurse,
                     "Admin" => StaffRole::Admin,
                     "Technician" => StaffRole::Technician,
-                    _ => StaffRole::Doctor, // Or perhaps a default, or handle the error
+                    _ => {
+                        return Err(rusqlite::Error::InvalidColumnType(
+                            // Correct error handling
+                            2, // Index of the 'role' column
+                            String::from("Invalid role value"),
+                            rusqlite::types::Type::Text,
+                        ));
+                    }
                 },
                 phone_number: row.get(3)?,
                 email: row.get(4)?,
                 address: row.get(5)?,
             })
-        })?
-        .collect::<Result<Vec<_>, _>>()?;
-    Ok(staff)
+        })
+        .optional()?; // Use optional to handle not found
+
+    staff_member.ok_or_else(|| anyhow!("Staff member not found")) // Return a proper error
+}
+
+/// Updates an existing staff member in the database.
+pub fn update_staff_member(staff_member: &StaffMember) -> Result<()> {
+    let conn = Connection::open(DB_NAME)?;
+    conn.execute(
+        "UPDATE staff SET name = ?, role = ?, phone_number = ?, email = ?, address = ? WHERE id = ?",
+        params![
+            staff_member.name,
+            match staff_member.role {
+                StaffRole::Doctor => "Doctor",
+                StaffRole::Nurse => "Nurse",
+                StaffRole::Admin => "Admin",
+                StaffRole::Technician => "Technician",
+            },
+            staff_member.phone_number,
+            staff_member.email,
+            staff_member.address,
+            staff_member.id,
+        ],
+    )?;
+    Ok(())
+}
+
+/// Deletes a staff member from the database by their ID.
+pub fn delete_staff_member(staff_id: i64) -> Result<()> {
+    let conn = Connection::open(DB_NAME)?;
+    conn.execute("DELETE FROM staff WHERE id = ?", params![staff_id])?;
+    Ok(())
 }

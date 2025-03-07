@@ -5,6 +5,8 @@
 
 use crate::auth::{login, Credentials};
 use crate::components::hospital;
+use crate::components::hospital::staff::delete::DeleteStaff;
+use crate::components::hospital::staff::update::UpdateStaff;
 use crate::components::{home::Home, login::Login, register::Register, Component};
 use crate::tui::{self, Tui};
 use anyhow::Result;
@@ -25,6 +27,10 @@ pub enum SelectedApp {
     StaffAdd,
     /// Represents the "List Staff" view.
     StaffList,
+    /// Represents the "Delete Staff" view.
+    StaffDelete,
+    /// Represents the "Update Staff" view.
+    StaffUpdate,
     /// Represents the "Hospital" view (which manages Patients and Staff).
     Hospital,
     /// Represents no specific application selection.
@@ -187,7 +193,9 @@ impl App {
                                     | SelectedApp::PatientDelete
                                     | SelectedApp::PatientUpdate
                                     | SelectedApp::StaffAdd
-                                    | SelectedApp::StaffList => {
+                                    | SelectedApp::StaffList
+                                    | SelectedApp::StaffDelete
+                                    | SelectedApp::StaffUpdate => {
                                         // These shouldn't be selectable from login screen, but we need to handle them
                                         // You could show an error message or just ignore them
                                         self.login.error_message =
@@ -293,6 +301,62 @@ impl App {
                                         }
                                         self.state = AppState::Running(selected_app);
                                     }
+                                    // SelectedApp::StaffUpdate => {
+                                    //     self.hospital = Some(hospital::HospitalApp::new());
+                                    //     if let Some(hospital) = &mut self.hospital {
+                                    //         hospital.set_state(hospital::HospitalState::Staff);
+                                    //         hospital.set_staff_state(
+                                    //             hospital::staff::StaffState::UpdateStaff,
+                                    //         );
+                                    //     }
+                                    //     self.state = AppState::Running(selected_app);
+                                    // }
+                                    // SelectedApp::StaffDelete => {
+                                    //     self.hospital = Some(hospital::HospitalApp::new());
+                                    //     if let Some(hospital) = &mut self.hospital {
+                                    //         hospital.set_state(hospital::HospitalState::Staff);
+                                    //         hospital.set_staff_state(
+                                    //             hospital::staff::StaffState::DeleteStaff,
+                                    //         )
+                                    //     }
+                                    //     self.state = AppState::Running(selected_app);
+                                    // }
+
+                                    // v2
+                                    SelectedApp::StaffUpdate => {
+                                        // Initialize, set state, AND fetch staff data
+                                        self.hospital = Some(hospital::HospitalApp::new());
+                                        if let Some(hospital) = &mut self.hospital {
+                                            hospital.set_state(hospital::HospitalState::Staff);
+                                            hospital.set_staff_state(
+                                                hospital::staff::StaffState::UpdateStaff,
+                                            );
+                                            hospital.staff.update_staff = Some(UpdateStaff::new());
+                                            if let Some(update_staff) =
+                                                &mut hospital.staff.update_staff
+                                            {
+                                                update_staff.fetch_staff()?; // <--- KEY CHANGE
+                                            }
+                                        }
+                                        self.state = AppState::Running(selected_app);
+                                    }
+                                    SelectedApp::StaffDelete => {
+                                        // Initialize, set state, AND fetch staff data
+                                        self.hospital = Some(hospital::HospitalApp::new());
+                                        if let Some(hospital) = &mut self.hospital {
+                                            hospital.set_state(hospital::HospitalState::Staff);
+                                            hospital.set_staff_state(
+                                                hospital::staff::StaffState::DeleteStaff,
+                                            );
+                                            hospital.staff.delete_staff = Some(DeleteStaff::new());
+                                            if let Some(delete_staff) =
+                                                &mut hospital.staff.delete_staff
+                                            {
+                                                delete_staff.fetch_staff()?; // <--- KEY CHANGE
+                                            }
+                                        }
+                                        self.state = AppState::Running(selected_app);
+                                    }
                                     SelectedApp::Hospital => {
                                         // Instantiate HospitalApp (if needed) and switch to it.
                                         self.hospital = Some(hospital::HospitalApp::new());
@@ -317,7 +381,9 @@ impl App {
                         | SelectedApp::PatientDelete
                         | SelectedApp::PatientUpdate
                         | SelectedApp::StaffAdd
-                        | SelectedApp::StaffList => {
+                        | SelectedApp::StaffList
+                        | SelectedApp::StaffDelete
+                        | SelectedApp::StaffUpdate => {
                             // Handle input in the Hospital component
                             if let Some(hospital) = &mut self.hospital {
                                 if let crossterm::event::Event::Key(key) = event {
@@ -380,7 +446,9 @@ impl App {
             | AppState::Running(SelectedApp::PatientDelete)
             | AppState::Running(SelectedApp::PatientUpdate)
             | AppState::Running(SelectedApp::StaffAdd)
-            | AppState::Running(SelectedApp::StaffList) => {
+            | AppState::Running(SelectedApp::StaffList)
+            | AppState::Running(SelectedApp::StaffDelete)
+            | AppState::Running(SelectedApp::StaffUpdate) => {
                 // Render the HospitalApp (which will render its sub-components)
                 if let Some(hospital) = &self.hospital {
                     hospital.render(frame);
