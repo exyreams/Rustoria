@@ -9,6 +9,7 @@ use anyhow::{anyhow, Context, Result};
 use bcrypt::{hash, verify, DEFAULT_COST};
 use rusqlite::{params, Connection, OptionalExtension};
 use std::path::Path;
+use time::{format_description, Date};
 
 /// The name of the database file.
 const DB_NAME: &str = "rustoria.db";
@@ -387,9 +388,119 @@ pub fn update_staff_member(staff_member: &StaffMember) -> Result<()> {
     Ok(())
 }
 
+/// Assigns a shift to a staff member.
+///
+/// # Arguments
+///
+/// * `staff_id` - The ID of the staff member.
+/// * `date` - The date of the shift.
+/// * `shift` - The shift string ("Morning", "Afternoon", "Night").
+///
+/// # Returns
+///
+/// Returns a `Result` indicating success or an error.
+
+pub fn assign_staff_shift(staff_id: i64, date: &Date, shift: &str) -> Result<()> {
+    let conn = Connection::open("rustoria.db")?;
+
+    // Convert the `time::Date` to a string format suitable for SQLite
+    let date_str = date
+        .format(&format_description::parse("[year]-[month]-[day]").unwrap())
+        .unwrap();
+
+    conn.execute(
+        "INSERT INTO shifts (staff_id, date, shift) VALUES (?, ?, ?)",
+        params![staff_id, date_str, shift],
+    )?;
+
+    Ok(())
+}
+
 /// Deletes a staff member from the database by their ID.
 pub fn delete_staff_member(staff_id: i64) -> Result<()> {
     let conn = Connection::open(DB_NAME)?;
     conn.execute("DELETE FROM staff WHERE id = ?", params![staff_id])?;
     Ok(())
+}
+
+/// Retrieves all assigned shifts for a staff member.
+///
+/// # Arguments
+///
+/// * `staff_id` - The ID of the staff member.
+///
+/// # Returns
+///
+/// Returns a `Result` containing a vector of (Date, shift) tuples.
+pub fn get_assigned_shifts_for_staff(staff_id: i64) -> Result<Vec<(Date, String)>> {
+    let conn = Connection::open(DB_NAME)?;
+
+    let mut stmt =
+        conn.prepare("SELECT date, shift FROM shifts WHERE staff_id = ? ORDER BY date")?;
+
+    let shifts_iter = stmt.query_map(params![staff_id], |row| {
+        let date_str: String = row.get(0)?;
+        let shift: String = row.get(1)?;
+
+        // Parse the date string using split and conversion
+        let parts: Vec<&str> = date_str.split('-').collect();
+        if parts.len() != 3 {
+            return Err(rusqlite::Error::InvalidColumnType(
+                0,
+                format!("Invalid date format: {}", date_str),
+                rusqlite::types::Type::Text,
+            ));
+        }
+
+        let year = parts[0].parse::<i32>().map_err(|_| {
+            rusqlite::Error::InvalidColumnType(
+                0,
+                format!("Invalid year: {}", parts[0]),
+                rusqlite::types::Type::Text,
+            )
+        })?;
+
+        let month = parts[1].parse::<u8>().map_err(|_| {
+            rusqlite::Error::InvalidColumnType(
+                0,
+                format!("Invalid month: {}", parts[1]),
+                rusqlite::types::Type::Text,
+            )
+        })?;
+
+        let day = parts[2].parse::<u8>().map_err(|_| {
+            rusqlite::Error::InvalidColumnType(
+                0,
+                format!("Invalid day: {}", parts[2]),
+                rusqlite::types::Type::Text,
+            )
+        })?;
+
+        // Create the Date object
+        let month = time::Month::try_from(month).map_err(|_| {
+            rusqlite::Error::InvalidColumnType(
+                0,
+                format!("Invalid month number: {}", month),
+                rusqlite::types::Type::Text,
+            )
+        })?;
+
+        let date = time::Date::from_calendar_date(year, month, day).map_err(|e| {
+            rusqlite::Error::InvalidColumnType(
+                0,
+                format!("Invalid date components: {}", e),
+                rusqlite::types::Type::Text,
+            )
+        })?;
+
+        Ok((date, shift))
+    })?;
+
+    // Collect results and handle errors
+    let mut shifts = Vec::new();
+    for shift in shifts_iter {
+        shifts.push(shift?);
+    }
+
+    Ok(shifts)
 }

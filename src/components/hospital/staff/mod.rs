@@ -4,6 +4,7 @@
 //! updating, and deleting.  Uses submodules for each action.
 
 use self::add::AddStaff;
+use self::assign::AssignStaff;
 use self::delete::DeleteStaff;
 use self::list::ListStaff;
 use self::update::UpdateStaff;
@@ -13,9 +14,15 @@ use crate::tui::Frame;
 use anyhow::Result;
 use crossterm::event::KeyEvent;
 
+/// Module for adding staff members.
 pub mod add;
+/// Module for assigning shifts to staff members.
+pub mod assign;
+/// Module for deleting staff members.
 pub mod delete;
+/// Module for listing staff members.
 pub mod list;
+/// Module for updating staff member information.
 pub mod update;
 
 /// Actions that can be performed within the staff management component.
@@ -39,16 +46,22 @@ pub enum StaffState {
     DeleteStaff,
     /// Updating staff information.
     UpdateStaff,
+    /// Assigning a shift to a staff member.
+    AssignStaff,
 }
 
 /// Manages staff-related functionalities within the hospital application.
 pub struct Staff {
+    /// Component for adding staff.
     add_staff: AddStaff,
+    /// Component for listing staff.
     list_staff: ListStaff,
     /// Wrapped in Option because it's only active during deletion.
     pub delete_staff: Option<DeleteStaff>,
     /// Wrapped in Option because it's only active during updates.
     pub update_staff: Option<UpdateStaff>,
+    /// Component for assigning shifts
+    pub assign_staff: Option<AssignStaff>,
     /// Current state of the staff component.
     pub state: StaffState,
 }
@@ -65,6 +78,7 @@ impl Staff {
             list_staff,
             delete_staff: None,
             update_staff: None,
+            assign_staff: None,           // Initialize assign_staff
             state: StaffState::ListStaff, // Start in ListStaff state
         }
     }
@@ -137,6 +151,22 @@ impl Component for Staff {
                     }
                 }
             }
+            StaffState::AssignStaff => {
+                // Handle input for AssignStaff
+                if let Some(assign_staff) = &mut self.assign_staff {
+                    if let Some(selected_app) = assign_staff.handle_input(event)? {
+                        match selected_app {
+                            SelectedApp::None => {
+                                self.state = StaffState::ListStaff;
+                                self.assign_staff = None; // Remove component
+                                self.initialize_list()?; // Refresh the list.
+                                return Ok(Some(SelectedApp::None));
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+            }
         }
         Ok(None)
     }
@@ -157,6 +187,18 @@ impl Component for Staff {
                     update_staff.render(frame);
                 }
             }
+            StaffState::AssignStaff => {
+                // Render AssignStaff
+                if let Some(assign_staff) = &self.assign_staff {
+                    assign_staff.render(frame);
+                }
+            }
         }
+    }
+}
+
+impl Default for Staff {
+    fn default() -> Self {
+        Self::new()
     }
 }

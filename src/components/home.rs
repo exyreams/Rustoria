@@ -234,8 +234,8 @@ impl Home {
                             },
                             // Staff Scheduling
                             5 => match submenu_idx {
-                                0 => SelectedApp::StaffAdd, // Add Staff
-                                // 1 => SelectedApp::StaffAssign,       // Assign Shift
+                                0 => SelectedApp::StaffAdd,    // Add Staff
+                                1 => SelectedApp::StaffAssign, // Assign Shift
                                 2 => SelectedApp::StaffDelete, // Delete Staff
                                 3 => SelectedApp::StaffList,   // List Staff
                                 4 => SelectedApp::StaffUpdate, // Update Staff
@@ -542,7 +542,6 @@ impl Component for Home {
             );
 
         frame.render_widget(submenu_list, right_inner);
-
         // Help text
         let help_text =
             "←→: Switch panels | ↑↓: Navigate | Enter: Select | Tab: Logout | Esc: Back";

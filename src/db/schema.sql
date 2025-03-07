@@ -23,11 +23,10 @@ CREATE TABLE IF NOT EXISTS patients (
 );
 
 -- Create the staff table
-CREATE TABLE IF NOT EXISTS staff (
-   id INTEGER PRIMARY KEY,
-   name TEXT NOT NULL,
-   role TEXT NOT NULL,
-   phone_number TEXT NOT NULL,
-   email TEXT,
-   address TEXT NOT NULL
+CREATE TABLE IF NOT EXISTS shifts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    staff_id INTEGER NOT NULL,
+    date TEXT NOT NULL,
+    shift TEXT NOT NULL,
+    FOREIGN KEY (staff_id) REFERENCES staff(id)
 );

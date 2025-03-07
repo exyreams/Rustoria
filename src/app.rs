@@ -25,6 +25,8 @@ pub enum SelectedApp {
     PatientUpdate,
     /// Represents the "Add Staff" view.
     StaffAdd,
+    /// Assign Shift
+    StaffAssign,
     /// Represents the "List Staff" view.
     StaffList,
     /// Represents the "Delete Staff" view.
@@ -193,6 +195,7 @@ impl App {
                                     | SelectedApp::PatientDelete
                                     | SelectedApp::PatientUpdate
                                     | SelectedApp::StaffAdd
+                                    | SelectedApp::StaffAssign
                                     | SelectedApp::StaffList
                                     | SelectedApp::StaffDelete
                                     | SelectedApp::StaffUpdate => {
@@ -289,6 +292,23 @@ impl App {
                                         }
                                         self.state = AppState::Running(selected_app);
                                     }
+                                    SelectedApp::StaffAssign => {
+                                        // Initialize HospitalApp, set state, AND fetch staff data.
+                                        self.hospital = Some(hospital::HospitalApp::new()); // Create if it doesn't exist.
+                                        if let Some(hospital) = &mut self.hospital {
+                                            hospital.set_state(hospital::HospitalState::Staff);
+                                            hospital.set_staff_state(crate::components::hospital::staff::StaffState::AssignStaff);
+
+                                            // Initialize AssignStaff if it hasn't been initialized yet.
+                                            if hospital.staff.assign_staff.is_none() {
+                                                let mut assign_staff = crate::components::hospital::staff::assign::AssignStaff::new();
+                                                assign_staff.fetch_staff()?; // Crucial: Load the staff data!
+                                                hospital.staff.assign_staff = Some(assign_staff);
+                                            }
+                                        }
+                                        self.state = AppState::Running(selected_app);
+                                        // Correct place
+                                    }
                                     SelectedApp::StaffList => {
                                         // Initialize HospitalApp with ListStaff state
                                         self.hospital = Some(hospital::HospitalApp::new());
@@ -301,6 +321,7 @@ impl App {
                                         }
                                         self.state = AppState::Running(selected_app);
                                     }
+
                                     SelectedApp::StaffUpdate => {
                                         // Initialize, set state, AND fetch staff data
                                         self.hospital = Some(hospital::HospitalApp::new());
@@ -381,6 +402,23 @@ impl App {
                                 self.state = AppState::Home;
                             }
                         }
+                        SelectedApp::StaffAssign => {
+                            if let Some(hospital) = &mut self.hospital {
+                                // We *don't* change the state here.  We stay in Running(StaffAssign)
+                                // until the *hospital* component tells us to go back to Home.
+                                if let crossterm::event::Event::Key(key_event) = event {
+                                    if let Some(selected_app) = hospital.handle_input(key_event)? {
+                                        match selected_app {
+                                            SelectedApp::None => {
+                                                self.state = AppState::Home;
+                                                self.hospital = None;
+                                            }
+                                            _ => {} // Handle other actions if necessary
+                                        }
+                                    }
+                                }
+                            }
+                        }
                         _ => {
                             // For other Running states (if any), default back to Home
                             self.state = AppState::Home;
@@ -424,6 +462,7 @@ impl App {
             | AppState::Running(SelectedApp::PatientDelete)
             | AppState::Running(SelectedApp::PatientUpdate)
             | AppState::Running(SelectedApp::StaffAdd)
+            | AppState::Running(SelectedApp::StaffAssign)
             | AppState::Running(SelectedApp::StaffList)
             | AppState::Running(SelectedApp::StaffDelete)
             | AppState::Running(SelectedApp::StaffUpdate) => {
@@ -441,5 +480,11 @@ impl App {
             AppState::Running(SelectedApp::None) | AppState::Running(SelectedApp::Quit) => todo!(),
             AppState::Quitting => todo!(),
         }
+    }
+}
+
+impl Default for App {
+    fn default() -> Self {
+        Self::new()
     }
 }
