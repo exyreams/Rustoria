@@ -301,28 +301,6 @@ impl App {
                                         }
                                         self.state = AppState::Running(selected_app);
                                     }
-                                    // SelectedApp::StaffUpdate => {
-                                    //     self.hospital = Some(hospital::HospitalApp::new());
-                                    //     if let Some(hospital) = &mut self.hospital {
-                                    //         hospital.set_state(hospital::HospitalState::Staff);
-                                    //         hospital.set_staff_state(
-                                    //             hospital::staff::StaffState::UpdateStaff,
-                                    //         );
-                                    //     }
-                                    //     self.state = AppState::Running(selected_app);
-                                    // }
-                                    // SelectedApp::StaffDelete => {
-                                    //     self.hospital = Some(hospital::HospitalApp::new());
-                                    //     if let Some(hospital) = &mut self.hospital {
-                                    //         hospital.set_state(hospital::HospitalState::Staff);
-                                    //         hospital.set_staff_state(
-                                    //             hospital::staff::StaffState::DeleteStaff,
-                                    //         )
-                                    //     }
-                                    //     self.state = AppState::Running(selected_app);
-                                    // }
-
-                                    // v2
                                     SelectedApp::StaffUpdate => {
                                         // Initialize, set state, AND fetch staff data
                                         self.hospital = Some(hospital::HospitalApp::new());
