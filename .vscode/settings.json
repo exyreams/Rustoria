@@ -1,8 +1,11 @@
 {
     "cSpell.words": [
+        "AUTOINCREMENT",
         "crossterm",
         "ratatui",
+        "repr",
         "rusqlite",
-        "Rustoria"
+        "Rustoria",
+        "serde",
     ]
 }
