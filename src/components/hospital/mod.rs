@@ -1,11 +1,12 @@
 //! Hospital management module.
 //!
-//! This module serves as the main application module for the hospital,
-//! providing top-level navigation and management of the hospital's
-//! functionalities, specifically the patient management system.
+//! This module represents the main application for managing hospital data,
+//! including patients and staff. It orchestrates the different components
+//! and their states.
 
 use self::patients::PatientsState;
 use self::staff::Staff;
+use self::staff::StaffState; // Import StaffState
 use crate::components::Component;
 use crate::tui::Frame;
 use anyhow::Result;
@@ -15,133 +16,145 @@ pub mod patients;
 pub mod staff;
 
 /// Enum representing the different states of the Hospital application.
-///
-/// This enum defines the different views or sections within the hospital
-/// application, such as the Patients section.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HospitalState {
-    /// Represents the Patients section of the hospital application.
+    /// Represents the state where the patient management component is active.
     Patients,
-    /// Represents the Staff Scheduling section of the hospital application.
+    /// Represents the state where the staff management component is active.
     Staff,
 }
 
 /// Struct representing the main Hospital application.
 ///
-/// This struct manages the overall state and components of the hospital
-/// application, providing entry points for handling input and rendering
-/// the UI.
+/// This struct manages the overall state of the hospital application
+/// and delegates functionality to its sub-components (patients and staff).
 pub struct HospitalApp {
     /// The current state of the hospital application.
     pub state: HospitalState,
-    /// The patients component, which handles patient-related functionalities.
+    /// The patient management component.
     pub patients: patients::Patients,
-    /// The patients component, which handles patient-related functionalities.
+    /// The staff management component.
     pub staff: Staff,
 }
 
 impl HospitalApp {
-    /// Creates a new `HospitalApp` instance.
+    /// Creates a new instance of the `HospitalApp`.
     ///
-    /// Initializes the `patients` component and fetches the initial patient list.
+    /// Initializes the patients and staff components and sets the initial state.
     ///
     /// # Returns
     ///
-    /// A new `HospitalApp` instance.
+    /// A new instance of `HospitalApp`.
     pub fn new() -> Self {
-        // Create a new Patients component
+        // Initialize the Patients component
         let mut patients = patients::Patients::new();
-        // Initialize the patient list, panicking if it fails
+        // Initialize the patient list
         patients
             .initialize_list()
             .expect("Failed to initialize patient list");
 
+        // Initialize the Staff component
+        let mut staff = Staff::new(); // Initialize Staff
+                                      // Initialize the staff list
+        staff
+            .initialize_list()
+            .expect("Failed to initialize staff list");
+
         Self {
-            // Set the initial state to Patients
-            state: HospitalState::Patients,
-            // Store the initialized Patients component
+            state: HospitalState::Patients, // Default state can now be either Patients or Staff
             patients,
-            staff: Staff::new(),
+            staff,
         }
     }
-    /// Sets the state of the `Patients` component.
+
+    /// Sets the state of the patients component.
     ///
-    /// This method allows external components to change the `PatientsState`
-    /// within the `HospitalApp`. It also handles the initialization of
-    /// patient data when transitioning to the `ListPatients` state.
+    /// This method updates the internal state of the `patients` component
+    /// and re-initializes the patient list if necessary.
     ///
     /// # Arguments
     ///
-    /// * `state`: The new `PatientsState` to set.
+    /// * `state` - The new `PatientsState` to set.
     pub fn set_patients_state(&mut self, state: PatientsState) {
-        // Set the new state of the Patients component
         self.patients.state = state;
-        // Initialize data if switching to ListPatients
         if state == PatientsState::ListPatients {
-            // Attempt to initialize the patient list
             if let Err(e) = self.patients.initialize_list() {
-                // Print an error message to stderr if initialization fails
                 eprintln!("Error initializing patient list: {}", e);
             }
         }
     }
 
     /// Sets the current hospital application state.
+    ///
+    /// # Arguments
+    ///
+    /// * `new_state` - The new `HospitalState` to set.
     pub fn set_state(&mut self, new_state: HospitalState) {
         self.state = new_state;
+    }
+
+    /// Sets the state of the staff component.
+    ///
+    /// This method updates the internal state of the `staff` component
+    /// and re-initializes the staff list if necessary.
+    ///
+    /// # Arguments
+    ///
+    /// * `state` - The new `StaffState` to set.
+    pub fn set_staff_state(&mut self, state: StaffState) {
+        self.staff.state = state;
+        if state == StaffState::ListStaff {
+            if let Err(e) = self.staff.initialize_list() {
+                eprintln!("Error initializing staff list: {}", e);
+            }
+        }
     }
 }
 
 impl Component for HospitalApp {
-    /// Handles input events for the Hospital application.
+    /// Handles user input events.
     ///
-    /// This method delegates input handling to the appropriate component based
-    /// on the current application state. Currently, it only handles input
-    /// for the `Patients` component.
+    /// This function processes `KeyEvent`s and delegates them to the
+    /// currently active sub-component (`patients` or `staff`).
     ///
     /// # Arguments
     ///
-    /// * `event`: The key event to handle.
+    /// * `event` - The key event to handle.
     ///
     /// # Returns
     ///
-    /// Returns an `Option<crate::app::SelectedApp>` indicating if a top-level
-    /// application action should be taken.
+    /// Returns `Ok(Some(crate::app::SelectedApp))` if an application selection is made,
+    /// `Ok(None)` otherwise, or an `Err` if an error occurs.
     fn handle_input(&mut self, event: KeyEvent) -> Result<Option<crate::app::SelectedApp>> {
         match self.state {
-            // Handle input when in the Patients state
             HospitalState::Patients => {
                 // Delegate input handling to the Patients component
                 if let Some(action) = self.patients.handle_input(event)? {
-                    // Return any action returned by the Patients component
-                    return Ok(Some(action)); // Directly return any action from Patients
+                    return Ok(Some(action));
                 }
             }
             HospitalState::Staff => {
-                // Delegate input handling to the Staff component
+                // Delegate to the Staff component
                 if let Some(action) = self.staff.handle_input(event)? {
-                    // Return any action returned by the Staff component
-                    return Ok(Some(action)); // Directly return any action from Staff
+                    return Ok(Some(action));
                 }
             }
         }
-        // If no action is taken, return None
         Ok(None)
     }
 
-    /// Renders the Hospital application UI.
+    /// Renders the hospital application to the terminal.
     ///
-    /// This method renders the appropriate component based on the current
-    /// application state. Currently, it only renders the `Patients` component.
+    /// This function renders the currently active sub-component
+    /// (`patients` or `staff`) to the provided frame.
     ///
     /// # Arguments
     ///
-    /// * `frame`: The frame to render the UI to.
+    /// * `frame` - The frame to render to.
     fn render(&self, frame: &mut Frame) {
         match self.state {
-            // Render the Patients component when in the Patients state
             HospitalState::Patients => self.patients.render(frame),
-            HospitalState::Staff => self.staff.render(frame),
+            HospitalState::Staff => self.staff.render(frame), // Render Staff component
         }
     }
 }

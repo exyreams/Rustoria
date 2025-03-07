@@ -98,6 +98,17 @@ impl Home {
         Ok(())
     }
 
+    /// Handles user input events.
+    ///
+    /// This function processes keyboard input to navigate the UI, select menu items, and handle the logout process.
+    ///
+    /// # Arguments
+    ///
+    /// * `key` - The key event received from the terminal.
+    ///
+    /// # Returns
+    ///
+    /// * `Result<Option<SelectedApp>>` -  Returns `Ok(Some(SelectedApp))` if a menu item is selected that navigates to a new app, `Ok(Some(SelectedApp::None))` if the user logs out, `Ok(None)` if the input is handled within the Home component, or `Err` if an error occurs.
     pub fn handle_input(&mut self, key: KeyEvent) -> Result<Option<SelectedApp>> {
         if self.show_logout_dialog {
             return self.handle_logout_dialog_input(key);
@@ -207,8 +218,9 @@ impl Home {
                             5 => match submenu_idx {
                                 0 => SelectedApp::StaffAdd, // Add Staff
                                 // 1 => SelectedApp::StaffAssign,       // Assign Shift
-                                // 2 => SelectedApp::StaffList,         // List Staff
-                                // 3 => SelectedApp::StaffRemove,       // Remove Staff
+                                2 => SelectedApp::StaffList, // List Staff
+                                // 3 => SelectedApp::StaffRemove,       // Delete Staff
+                                // 3 => SelectedApp::StaffUpdate,       // Update Staff
                                 _ => SelectedApp::Hospital,
                             },
                             _ => SelectedApp::Hospital,
@@ -239,6 +251,17 @@ impl Home {
         Ok(None)
     }
 
+    /// Handles user input within the logout confirmation dialog.
+    ///
+    /// Processes keyboard input for selecting "Yes" or "No" in the logout confirmation dialog.
+    ///
+    /// # Arguments
+    ///
+    /// * `key` - The key event received from the terminal.
+    ///
+    /// # Returns
+    ///
+    /// * `Result<Option<SelectedApp>>` - Returns `Ok(Some(SelectedApp::None))` if the user confirms logout (selects "Yes"),  `Ok(None)` if the dialog is still active or cancelled, or `Err` if an error occurs.
     fn handle_logout_dialog_input(&mut self, key: KeyEvent) -> Result<Option<SelectedApp>> {
         match key.code {
             KeyCode::Left | KeyCode::Right => {
@@ -261,10 +284,29 @@ impl Home {
 }
 
 impl Component for Home {
+    /// Handles input events for the `Home` component.
+    ///
+    /// This function simply calls the `handle_input` method of the `Home` struct.
+    ///
+    /// # Arguments
+    ///
+    /// * `event` - The key event to handle.
+    ///
+    /// # Returns
+    ///
+    /// * `Result<Option<SelectedApp>>` - Returns the result of `handle_input`.
     fn handle_input(&mut self, event: KeyEvent) -> Result<Option<SelectedApp>> {
         self.handle_input(event)
     }
 
+    /// Renders the `Home` component to the terminal.
+    ///
+    /// This function draws the UI elements of the home screen, including the welcome message,
+    /// feature list, submenu options, and logout confirmation dialog.
+    ///
+    /// # Arguments
+    ///
+    /// * `frame` - A mutable reference to the `Frame` used for rendering.
     fn render(&self, frame: &mut Frame) {
         // Apply global background
         frame.render_widget(
@@ -534,6 +576,14 @@ impl Component for Home {
 }
 
 impl Home {
+    /// Renders the logout confirmation dialog.
+    ///
+    /// This function displays a dialog box asking the user to confirm their logout.
+    ///
+    /// # Arguments
+    ///
+    /// * `frame` - A mutable reference to the `Frame` used for rendering.
+    /// * `area` - The `Rect` representing the available area for rendering.
     fn render_logout_dialog(&self, frame: &mut Frame, area: Rect) {
         let dialog_width = 40;
         let dialog_height = 8;
