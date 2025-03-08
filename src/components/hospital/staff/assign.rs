@@ -220,6 +220,9 @@ impl AssignStaff {
                 // Reset focused month when entering date selection
                 self.focused_month = 0;
 
+                // Fetch assigned shifts for the selected staff member.
+                self.fetch_staff_assignments(self.filtered_staff[selected].id)?;
+
                 return Ok(());
             }
         }
