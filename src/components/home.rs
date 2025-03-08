@@ -61,7 +61,12 @@ impl Home {
             // Inventory Management
             vec!["Add Inventory", "Check Stock", "Auto Reorder"],
             // Medical Records
-            vec!["Store Record", "Retrieve Records", "Update Record"],
+            vec![
+                "Store Record",
+                "Retrieve Records",
+                "Update Record",
+                "Delete Record",
+            ],
             // Patient Management
             vec![
                 "Add Patient",
@@ -213,9 +218,10 @@ impl Home {
                             },
                             // Medical Records
                             2 => match submenu_idx {
-                                // 0 => SelectedApp::MedicalStore,      // Store Record
-                                // 1 => SelectedApp::MedicalRetrieve,   // Retrieve Records
-                                // 2 => SelectedApp::MedicalUpdate,     // Update Record
+                                0 => SelectedApp::RecordStore,    // Store Record
+                                1 => SelectedApp::RecordRetrieve, // Retrieve Records
+                                2 => SelectedApp::RecordUpdate,   // Update Record
+                                3 => SelectedApp::RecordDelete,   // Update Record
                                 _ => SelectedApp::Hospital,
                             },
                             // Patient Management

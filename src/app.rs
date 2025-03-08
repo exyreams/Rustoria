@@ -2,9 +2,14 @@
 //!
 //! This module contains the core application logic, managing the different
 //! application states, handling user input, and rendering the user interface.
+//! It encapsulates the application's state machine, the various screens (login, register, home), and the main event loop.
+//! The primary type exposed is the `App` struct, which manages the overall application flow.
 
 use crate::auth::{login, Credentials};
 use crate::components::hospital;
+use crate::components::hospital::records::delete::DeleteRecord;
+use crate::components::hospital::records::update::UpdateRecord;
+use crate::components::hospital::records::RecordsState;
 use crate::components::hospital::staff::delete::DeleteStaff;
 use crate::components::hospital::staff::update::UpdateStaff;
 use crate::components::{home::Home, login::Login, register::Register, Component};
@@ -13,6 +18,10 @@ use anyhow::Result;
 use crossterm::event::{KeyCode, KeyEvent};
 
 /// Enum representing the different applications/views within Rustoria.
+///
+/// This enum defines the possible "screens" or applications within the main Rustoria application.
+/// Each variant represents a distinct area of functionality (e.g., adding a patient, listing staff).
+/// Used for state management and determining which component to render and which input to handle.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SelectedApp {
     /// Represents the "Add Patient" view.
@@ -33,6 +42,14 @@ pub enum SelectedApp {
     StaffDelete,
     /// Represents the "Update Staff" view.
     StaffUpdate,
+    /// Represents the "Add Staff" view.
+    RecordStore,
+    /// Represents the "Adding Medical Records" view.
+    RecordRetrieve,
+    /// Represents the "Listing Medical Records" view.
+    RecordUpdate,
+    /// Represents the "Deleting Medical Records" view.
+    RecordDelete,
     /// Represents the "Hospital" view (which manages Patients and Staff).
     Hospital,
     /// Represents no specific application selection.
@@ -42,6 +59,10 @@ pub enum SelectedApp {
 }
 
 /// Enum representing the possible states of the entire application.
+///
+/// This enum defines the overall state of the Rustoria application.
+/// It dictates which screen is active (e.g., Login, Home) and controls the application's behavior.
+/// Used by the `App` struct to manage the application's lifecycle and transition between different states.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AppState {
     /// Represents the initial state of the application.
@@ -62,7 +83,9 @@ pub enum AppState {
 /// Main application struct for Rustoria.
 ///
 /// This struct manages the overall application flow, including
-/// state transitions, input handling, and UI rendering.
+/// state transitions, input handling, and UI rendering. It holds the application's state,
+/// components (login, register, home, hospital), and the main event loop.
+/// The `App` struct orchestrates the interaction between different components and manages the application's lifecycle.
 pub struct App {
     /// The current state of the application.
     pub state: AppState,
@@ -82,6 +105,7 @@ impl App {
     /// Creates a new instance of the `App`.
     ///
     /// Initializes the application with its initial state and components.
+    /// The initial state is set to `Init`, and the `should_quit` flag is set to `false`.
     ///
     /// # Returns
     ///
@@ -101,6 +125,7 @@ impl App {
     ///
     /// This function controls the main application flow:
     /// rendering the UI, handling user input, and updating the application state.
+    /// The loop continues until the `should_quit` flag is set to `true`.
     ///
     /// # Arguments
     ///
@@ -127,6 +152,7 @@ impl App {
     ///
     /// This function processes user input from the terminal, such as key presses,
     /// and updates the application's state based on the input and the current state.
+    /// It uses a match statement to handle input differently based on the current `AppState`.
     ///
     /// # Arguments
     ///
@@ -198,7 +224,11 @@ impl App {
                                     | SelectedApp::StaffAssign
                                     | SelectedApp::StaffList
                                     | SelectedApp::StaffDelete
-                                    | SelectedApp::StaffUpdate => {
+                                    | SelectedApp::StaffUpdate
+                                    | SelectedApp::RecordStore
+                                    | SelectedApp::RecordRetrieve
+                                    | SelectedApp::RecordUpdate
+                                    | SelectedApp::RecordDelete => {
                                         // These shouldn't be selectable from login screen, but we need to handle them
                                         // You could show an error message or just ignore them
                                         self.login.error_message =
@@ -356,6 +386,56 @@ impl App {
                                         }
                                         self.state = AppState::Running(selected_app);
                                     }
+                                    SelectedApp::RecordStore => {
+                                        self.hospital = Some(hospital::HospitalApp::new());
+                                        if let Some(hospital) = &mut self.hospital {
+                                            hospital.set_state(hospital::HospitalState::Records);
+                                            hospital.set_records_state(RecordsState::StoreRecord);
+                                            hospital.records.initialize_list()?;
+                                        }
+                                        self.state = AppState::Running(selected_app);
+                                    }
+                                    SelectedApp::RecordRetrieve => {
+                                        self.hospital = Some(hospital::HospitalApp::new());
+                                        if let Some(hospital) = &mut self.hospital {
+                                            hospital.set_state(hospital::HospitalState::Records);
+                                            hospital
+                                                .set_records_state(RecordsState::RetrieveRecords);
+                                            hospital.records.initialize_list()?;
+                                        }
+                                        self.state = AppState::Running(selected_app);
+                                    }
+                                    SelectedApp::RecordUpdate => {
+                                        self.hospital = Some(hospital::HospitalApp::new());
+                                        if let Some(hospital) = &mut self.hospital {
+                                            hospital.set_state(hospital::HospitalState::Records);
+                                            hospital.set_records_state(RecordsState::UpdateRecord);
+                                            hospital.records.update_record =
+                                                Some(UpdateRecord::new());
+                                            if let Some(update_record) =
+                                                &mut hospital.records.update_record
+                                            {
+                                                update_record.fetch_records()?;
+                                            }
+                                        }
+                                        self.state = AppState::Running(selected_app);
+                                    }
+                                    SelectedApp::RecordDelete => {
+                                        self.hospital = Some(hospital::HospitalApp::new());
+                                        if let Some(hospital) = &mut self.hospital {
+                                            hospital.set_state(hospital::HospitalState::Records);
+                                            hospital.set_records_state(RecordsState::DeleteRecord);
+                                            hospital.records.delete_record =
+                                                Some(DeleteRecord::new());
+                                            if let Some(delete_record) =
+                                                &mut hospital.records.delete_record
+                                            {
+                                                delete_record.fetch_records()?;
+                                            }
+                                        }
+                                        self.state = AppState::Running(selected_app);
+                                    }
+
                                     SelectedApp::Hospital => {
                                         // Instantiate HospitalApp (if needed) and switch to it.
                                         self.hospital = Some(hospital::HospitalApp::new());
@@ -382,7 +462,11 @@ impl App {
                         | SelectedApp::StaffAdd
                         | SelectedApp::StaffList
                         | SelectedApp::StaffDelete
-                        | SelectedApp::StaffUpdate => {
+                        | SelectedApp::StaffUpdate
+                        | SelectedApp::RecordStore
+                        | SelectedApp::RecordRetrieve
+                        | SelectedApp::RecordUpdate
+                        | SelectedApp::RecordDelete => {
                             // Handle input in the Hospital component
                             if let Some(hospital) = &mut self.hospital {
                                 if let crossterm::event::Event::Key(key) = event {
@@ -446,7 +530,7 @@ impl App {
     /// Renders the UI based on the current application state.
     ///
     /// This function calls the `render` method of the active component
-    /// to draw the UI elements to the terminal.
+    /// to draw the UI elements to the terminal. The specific component rendered depends on the current `AppState`.
     ///
     /// # Arguments
     ///
@@ -465,7 +549,11 @@ impl App {
             | AppState::Running(SelectedApp::StaffAssign)
             | AppState::Running(SelectedApp::StaffList)
             | AppState::Running(SelectedApp::StaffDelete)
-            | AppState::Running(SelectedApp::StaffUpdate) => {
+            | AppState::Running(SelectedApp::StaffUpdate)
+            | AppState::Running(SelectedApp::RecordStore)
+            | AppState::Running(SelectedApp::RecordRetrieve)
+            | AppState::Running(SelectedApp::RecordUpdate)
+            | AppState::Running(SelectedApp::RecordDelete) => {
                 // Render the HospitalApp (which will render its sub-components)
                 if let Some(hospital) = &self.hospital {
                     hospital.render(frame);

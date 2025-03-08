@@ -2,9 +2,12 @@
 //!
 //! This module provides functionality for interacting with the application's database.
 //! It includes functions for initializing the database, managing users,
-//! patients, and staff members.
+//! patients, and staff members. It encapsulates all database-related logic,
+//! ensuring data persistence and retrieval. The primary types exposed are functions
+//! for interacting with the database, such as `init_db`, `authenticate_user`, and
+//! `create_patient`.
 
-use crate::models::{Gender, Patient, StaffMember, StaffRole};
+use crate::models::{Gender, MedicalRecord, Patient, StaffMember, StaffRole};
 use anyhow::{anyhow, Context, Result};
 use bcrypt::{hash, verify, DEFAULT_COST};
 use rusqlite::{params, Connection, OptionalExtension};
@@ -12,18 +15,32 @@ use std::path::Path;
 use time::{format_description, Date};
 
 /// The name of the database file.
+///
+/// This constant defines the filename of the SQLite database used by the application.
+/// It is used by functions in this module to open and interact with the database.
 const DB_NAME: &str = "rustoria.db";
 
 /// Initializes the database.
 ///
-/// This function creates the database file if it doesn't exist and
-/// executes the schema defined in `schema.sql`. It also creates a
-/// default "root" user if one doesn't already exist.
+/// This function creates the database file if it doesn't exist and executes the schema
+/// defined in `schema.sql` to set up the necessary tables. It also creates a default
+/// "root" user if one doesn't already exist, using "root" as the default password.
 ///
 /// # Errors
 ///
-/// Returns an error if the database cannot be opened, the schema
-/// cannot be executed, or the default user cannot be created.
+/// Returns an error if the database cannot be opened, the schema cannot be executed,
+/// or the default user cannot be created. The errors are wrapped in `anyhow::Result`
+/// for easy error handling.
+///
+/// # Side Effects
+///
+/// Creates a new database file if one doesn't exist.  Executes SQL commands to
+/// create tables and insert data.
+///
+/// # Postconditions
+///
+/// The database file exists, and the necessary tables are created. If a "root"
+/// user does not exist, it will be created with a default password.
 pub fn init_db() -> Result<()> {
     // Open or create the database file
     let db_path = Path::new(DB_NAME);
@@ -57,8 +74,9 @@ pub fn init_db() -> Result<()> {
 
 /// Authenticates a user against the database.
 ///
-/// This function verifies the provided username and password
-/// against the stored credentials in the database.
+/// This function verifies the provided username and password against the stored credentials
+/// in the database. It retrieves the user's hashed password and uses `bcrypt` to compare
+/// it with the provided password.
 ///
 /// # Arguments
 ///
@@ -69,6 +87,15 @@ pub fn init_db() -> Result<()> {
 ///
 /// Returns `Ok(i64)` with the user ID if authentication is successful.
 /// Returns an error if the username or password is invalid.
+///
+/// # Errors
+///
+/// Returns an error if the database cannot be opened, the user is not found, or the
+/// password verification fails.
+///
+/// # Postconditions
+///
+/// Returns the user's ID if authentication is successful.
 pub fn authenticate_user(username: &str, password: &str) -> Result<i64> {
     // Open the database connection
     let db_path = Path::new(DB_NAME);
@@ -90,7 +117,8 @@ pub fn authenticate_user(username: &str, password: &str) -> Result<i64> {
 /// Creates a new user in the database.
 ///
 /// This function creates a new user with the given username and password.
-/// The password will be hashed before storing it.
+/// The password will be hashed using bcrypt before storing it in the database
+/// to ensure security.
 ///
 /// # Arguments
 ///
@@ -99,8 +127,17 @@ pub fn authenticate_user(username: &str, password: &str) -> Result<i64> {
 ///
 /// # Errors
 ///
-/// Returns an error if the database cannot be opened or the user cannot
-/// be created.
+/// Returns an error if the database cannot be opened, the password hashing fails,
+/// or the user creation fails.
+///
+/// # Side Effects
+///
+/// Adds a new user record to the `users` table in the database.
+///
+/// # Postconditions
+///
+/// A new user is created in the database with the provided username and a hashed version
+/// of the password.
 pub fn create_user(username: &str, password: &str) -> Result<()> {
     // Open the database connection
     let db_path = Path::new(DB_NAME);
@@ -120,6 +157,9 @@ pub fn create_user(username: &str, password: &str) -> Result<()> {
 
 /// Retrieves a username from the database given a user ID.
 ///
+/// This function queries the database for a user with the specified ID and returns their username.
+/// It's useful for displaying user-related information based on the user's ID.
+///
 /// # Arguments
 ///
 /// * `user_id` - The ID of the user.
@@ -128,6 +168,11 @@ pub fn create_user(username: &str, password: &str) -> Result<()> {
 ///
 /// Returns `Ok(String)` with the username if found.
 /// Returns an error if the user ID is not found or if there is a database issue.
+///
+/// # Errors
+///
+/// Returns an error if the database cannot be opened, the user ID is not found, or
+/// there is an issue querying the database.
 pub fn get_username(user_id: i64) -> Result<String> {
     // Open the database connection
     let db_path = Path::new(DB_NAME);
@@ -141,6 +186,27 @@ pub fn get_username(user_id: i64) -> Result<String> {
 }
 
 /// Creates a new patient in the database.
+///
+/// This function inserts a new patient record into the `patients` table in the database.
+/// It takes a `Patient` struct as input and extracts the relevant data to populate the
+/// database record.
+///
+/// # Arguments
+///
+/// * `patient` - A reference to the `Patient` struct containing the patient's information.
+///
+/// # Errors
+///
+/// Returns an error if the database cannot be opened or the patient record cannot be created.
+///
+/// # Side Effects
+///
+/// Adds a new patient record to the `patients` table in the database.
+///
+/// # Postconditions
+///
+/// A new patient record is created in the database with the information provided in the
+/// `patient` struct.
 pub fn create_patient(patient: &Patient) -> Result<()> {
     let conn = Connection::open(DB_NAME)?;
     conn.execute(
@@ -166,6 +232,19 @@ pub fn create_patient(patient: &Patient) -> Result<()> {
 }
 
 /// Retrieves all patients from the database.
+///
+/// This function queries the database for all patient records and returns them as a vector
+/// of `Patient` structs.
+///
+/// # Returns
+///
+/// Returns `Ok(Vec<Patient>)` with a vector of `Patient` structs containing the information
+/// for all patients in the database. Returns an error if there is an issue querying the
+/// database or mapping the results to `Patient` structs.
+///
+/// # Errors
+///
+/// Returns an error if the database cannot be opened or the patient records cannot be retrieved.
 pub fn get_all_patients() -> Result<Vec<Patient>> {
     let conn = Connection::open(DB_NAME)?;
     let mut stmt = conn.prepare("SELECT id, first_name, last_name, date_of_birth, gender, address, phone_number, email, medical_history, allergies, current_medications FROM patients")?;
@@ -205,6 +284,23 @@ pub fn get_all_patients() -> Result<Vec<Patient>> {
 }
 
 /// Retrieves a single patient by their ID.
+///
+/// This function queries the database for a patient with the specified ID and returns their information
+/// as a `Patient` struct.
+///
+/// # Arguments
+///
+/// * `patient_id` - The ID of the patient to retrieve.
+///
+/// # Returns
+///
+/// Returns `Ok(Patient)` with the patient's information if found. Returns an error if the patient
+/// is not found or if there is an issue querying the database.
+///
+/// # Errors
+///
+/// Returns an error if the database cannot be opened, the patient is not found, or there is an issue
+/// querying the database.
 pub fn get_patient(patient_id: i64) -> Result<Patient> {
     let conn = Connection::open(DB_NAME)?;
     let mut stmt = conn.prepare("SELECT id, first_name, last_name, date_of_birth, gender, address, phone_number, email, medical_history, allergies, current_medications FROM patients WHERE id = ?")?;
@@ -242,6 +338,27 @@ pub fn get_patient(patient_id: i64) -> Result<Patient> {
 }
 
 /// Updates an existing patient in the database.
+///
+/// This function updates the information for an existing patient in the `patients` table.
+/// It takes a `Patient` struct as input and updates the corresponding record in the database
+/// based on the patient's ID.
+///
+/// # Arguments
+///
+/// * `patient` - A reference to the `Patient` struct containing the updated patient information.
+///
+/// # Errors
+///
+/// Returns an error if the database cannot be opened or the patient record cannot be updated.
+///
+/// # Side Effects
+///
+/// Updates an existing patient record in the `patients` table in the database.
+///
+/// # Postconditions
+///
+/// The patient record in the database is updated with the information provided in the
+/// `patient` struct.
 pub fn update_patient(patient: &Patient) -> Result<()> {
     let conn = Connection::open(DB_NAME)?;
     conn.execute(
@@ -268,6 +385,25 @@ pub fn update_patient(patient: &Patient) -> Result<()> {
 }
 
 /// Deletes a patient record from the database by their ID.
+///
+/// This function deletes a patient record from the `patients` table in the database based on the
+/// provided patient ID.
+///
+/// # Arguments
+///
+/// * `patient_id` - The ID of the patient to delete.
+///
+/// # Errors
+///
+/// Returns an error if the database cannot be opened or the patient record cannot be deleted.
+///
+/// # Side Effects
+///
+/// Deletes a patient record from the `patients` table in the database.
+///
+/// # Postconditions
+///
+/// The patient record with the specified ID is removed from the database.
 pub fn delete_patient(patient_id: i64) -> Result<()> {
     let conn = Connection::open(DB_NAME)?;
     conn.execute("DELETE FROM patients WHERE id = ?", params![patient_id])?;
@@ -275,6 +411,27 @@ pub fn delete_patient(patient_id: i64) -> Result<()> {
 }
 
 /// Creates a new staff member in the database.
+///
+/// This function inserts a new staff member record into the `staff` table in the database.
+/// It takes a `StaffMember` struct as input and extracts the relevant data to populate the
+/// database record.
+///
+/// # Arguments
+///
+/// * `staff_member` - A reference to the `StaffMember` struct containing the staff member's information.
+///
+/// # Errors
+///
+/// Returns an error if the database cannot be opened or the staff member record cannot be created.
+///
+/// # Side Effects
+///
+/// Adds a new staff member record to the `staff` table in the database.
+///
+/// # Postconditions
+///
+/// A new staff member record is created in the database with the information provided in the
+/// `staff_member` struct.
 pub fn create_staff_member(staff_member: &StaffMember) -> Result<()> {
     let conn = Connection::open(DB_NAME)?;
     conn.execute(
@@ -296,6 +453,19 @@ pub fn create_staff_member(staff_member: &StaffMember) -> Result<()> {
 }
 
 /// Retrieves all staff members from the database.
+///
+/// This function queries the database for all staff member records and returns them as a vector
+/// of `StaffMember` structs.
+///
+/// # Returns
+///
+/// Returns `Ok(Vec<StaffMember>)` with a vector of `StaffMember` structs containing the information
+/// for all staff members in the database. Returns an error if there is an issue querying the
+/// database or mapping the results to `StaffMember` structs.
+///
+/// # Errors
+///
+/// Returns an error if the database cannot be opened or the staff member records cannot be retrieved.
 pub fn get_all_staff() -> Result<Vec<StaffMember>> {
     let conn = Connection::open(DB_NAME)?;
     let mut stmt =
@@ -332,6 +502,23 @@ pub fn get_all_staff() -> Result<Vec<StaffMember>> {
 }
 
 /// Retrieves a single staff member by their ID.
+///
+/// This function queries the database for a staff member with the specified ID and returns their information
+/// as a `StaffMember` struct.
+///
+/// # Arguments
+///
+/// * `staff_id` - The ID of the staff member to retrieve.
+///
+/// # Returns
+///
+/// Returns `Ok(StaffMember)` with the staff member's information if found. Returns an error if the staff
+/// member is not found or if there is an issue querying the database.
+///
+/// # Errors
+///
+/// Returns an error if the database cannot be opened, the staff member is not found, or there is an issue
+/// querying the database.
 pub fn get_staff(staff_id: i64) -> Result<StaffMember> {
     let conn = Connection::open(DB_NAME)?;
     let mut stmt = conn
@@ -367,6 +554,27 @@ pub fn get_staff(staff_id: i64) -> Result<StaffMember> {
 }
 
 /// Updates an existing staff member in the database.
+///
+/// This function updates the information for an existing staff member in the `staff` table.
+/// It takes a `StaffMember` struct as input and updates the corresponding record in the database
+/// based on the staff member's ID.
+///
+/// # Arguments
+///
+/// * `staff_member` - A reference to the `StaffMember` struct containing the updated staff member information.
+///
+/// # Errors
+///
+/// Returns an error if the database cannot be opened or the staff member record cannot be updated.
+///
+/// # Side Effects
+///
+/// Updates an existing staff member record in the `staff` table in the database.
+///
+/// # Postconditions
+///
+/// The staff member record in the database is updated with the information provided in the
+/// `staff_member` struct.
 pub fn update_staff_member(staff_member: &StaffMember) -> Result<()> {
     let conn = Connection::open(DB_NAME)?;
     conn.execute(
@@ -390,6 +598,9 @@ pub fn update_staff_member(staff_member: &StaffMember) -> Result<()> {
 
 /// Assigns a shift to a staff member.
 ///
+/// This function assigns a specific shift (Morning, Afternoon, Night) to a staff member
+/// on a given date.  It inserts a new record into the `shifts` table of the database.
+///
 /// # Arguments
 ///
 /// * `staff_id` - The ID of the staff member.
@@ -399,7 +610,20 @@ pub fn update_staff_member(staff_member: &StaffMember) -> Result<()> {
 /// # Returns
 ///
 /// Returns a `Result` indicating success or an error.
-
+///
+/// # Errors
+///
+/// Returns an error if the database cannot be opened or the shift cannot be assigned.  This
+/// includes issues with date formatting or invalid shift values.
+///
+/// # Side Effects
+///
+/// Inserts a new record into the `shifts` table.
+///
+/// # Postconditions
+///
+/// A new shift record is created in the `shifts` table associating the staff member with the
+/// specified date and shift.
 pub fn assign_staff_shift(staff_id: i64, date: &Date, shift: &str) -> Result<()> {
     let conn = Connection::open("rustoria.db")?;
 
@@ -417,6 +641,25 @@ pub fn assign_staff_shift(staff_id: i64, date: &Date, shift: &str) -> Result<()>
 }
 
 /// Deletes a staff member from the database by their ID.
+///
+/// This function deletes a staff member record from the `staff` table in the database based on the
+/// provided staff member ID.
+///
+/// # Arguments
+///
+/// * `staff_id` - The ID of the staff member to delete.
+///
+/// # Errors
+///
+/// Returns an error if the database cannot be opened or the staff member record cannot be deleted.
+///
+/// # Side Effects
+///
+/// Deletes a staff member record from the `staff` table in the database.
+///
+/// # Postconditions
+///
+/// The staff member record with the specified ID is removed from the database.
 pub fn delete_staff_member(staff_id: i64) -> Result<()> {
     let conn = Connection::open(DB_NAME)?;
     conn.execute("DELETE FROM staff WHERE id = ?", params![staff_id])?;
@@ -425,6 +668,9 @@ pub fn delete_staff_member(staff_id: i64) -> Result<()> {
 
 /// Retrieves all assigned shifts for a staff member.
 ///
+/// This function retrieves all assigned shifts for a given staff member from the `shifts` table.
+/// It returns a vector of tuples, where each tuple contains the date and shift for an assigned shift.
+///
 /// # Arguments
 ///
 /// * `staff_id` - The ID of the staff member.
@@ -432,6 +678,11 @@ pub fn delete_staff_member(staff_id: i64) -> Result<()> {
 /// # Returns
 ///
 /// Returns a `Result` containing a vector of (Date, shift) tuples.
+///
+/// # Errors
+///
+/// Returns an error if the database cannot be opened or the shifts cannot be retrieved.  This includes
+/// errors during date parsing from the database.
 pub fn get_assigned_shifts_for_staff(staff_id: i64) -> Result<Vec<(Date, String)>> {
     let conn = Connection::open(DB_NAME)?;
 
@@ -503,4 +754,166 @@ pub fn get_assigned_shifts_for_staff(staff_id: i64) -> Result<Vec<(Date, String)
     }
 
     Ok(shifts)
+}
+
+/// Creates a new medical record in the database.
+///
+/// This function creates a new medical record for a patient, including doctor's notes, nurse's notes,
+/// diagnosis, and prescription.  It stores this information in the `medical_records` table.
+///
+/// # Arguments
+///
+/// * `record` - A reference to a `MedicalRecord` struct containing the record's information.
+///
+/// # Errors
+///
+/// Returns an error if the database cannot be opened or the record cannot be inserted.
+///
+/// # Side Effects
+///
+/// Inserts a new record into the `medical_records` table.
+///
+/// # Postconditions
+///
+/// A new medical record is created in the database.
+pub fn create_medical_record(record: &MedicalRecord) -> Result<()> {
+    let conn = Connection::open("rustoria.db")?;
+    conn.execute(
+        "INSERT INTO medical_records (patient_id, doctor_notes, nurse_notes, diagnosis, prescription) VALUES (?, ?, ?, ?, ?)",
+        params![
+            record.patient_id,
+            record.doctor_notes,
+            record.nurse_notes,
+            record.diagnosis,
+            record.prescription
+        ],
+    )?;
+    Ok(())
+}
+
+/// Retrieves all medical records from the database.
+///
+/// This function queries the database for all medical records in the `medical_records` table
+/// and returns them as a `Vec<MedicalRecord>`.
+///
+/// # Returns
+///
+/// Returns a `Result` containing a vector of `MedicalRecord` structs.
+///
+/// # Errors
+///
+/// Returns an error if the database cannot be opened or the records cannot be retrieved.
+pub fn get_all_medical_records() -> Result<Vec<MedicalRecord>> {
+    let conn = Connection::open("rustoria.db")?;
+    let mut stmt = conn.prepare("SELECT * FROM medical_records")?;
+    let records = stmt
+        .query_map([], |row| {
+            Ok(MedicalRecord {
+                id: row.get(0)?,
+                patient_id: row.get(1)?,
+                doctor_notes: row.get(2)?,
+                nurse_notes: row.get(3)?,
+                diagnosis: row.get(4)?,
+                prescription: row.get(5)?,
+            })
+        })?
+        .collect::<Result<Vec<_>, _>>()?; // Collect into Result<Vec<>, _>
+    Ok(records)
+}
+
+/// Retrieves a specific medical record by its ID.
+///
+/// This function queries the database for a single medical record with the specified ID
+/// from the `medical_records` table.
+///
+/// # Arguments
+///
+/// * `record_id` - The ID of the medical record to retrieve.
+///
+/// # Returns
+///
+/// Returns a `Result` containing the `MedicalRecord` struct if found.
+///
+/// # Errors
+///
+/// Returns an error if the database cannot be opened, the record is not found, or the
+/// retrieval fails.
+pub fn get_medical_record(record_id: i64) -> Result<MedicalRecord> {
+    let conn = Connection::open("rustoria.db")?;
+    let mut stmt = conn.prepare("SELECT * FROM medical_records WHERE id = ?")?;
+    let record = stmt.query_row(params![record_id], |row| {
+        Ok(MedicalRecord {
+            id: row.get(0)?,
+            patient_id: row.get(1)?,
+            doctor_notes: row.get(2)?,
+            nurse_notes: row.get(3)?,
+            diagnosis: row.get(4)?,
+            prescription: row.get(5)?,
+        })
+    })?;
+    Ok(record)
+}
+
+/// Updates an existing medical record in the database.
+///
+/// This function updates an existing medical record in the `medical_records` table.
+///
+/// # Arguments
+///
+/// * `record` - A reference to the `MedicalRecord` struct with the updated information.  The `id` field
+///            is used to identify the record to update.
+///
+/// # Errors
+///
+/// Returns an error if the database cannot be opened or the update fails.
+///
+/// # Side Effects
+///
+/// Updates a row in the `medical_records` table.
+///
+/// # Postconditions
+///
+/// The medical record in the database is updated with the information from the provided `record`.
+pub fn update_medical_record(record: &MedicalRecord) -> Result<()> {
+    let conn = Connection::open("rustoria.db")?;
+    conn.execute(
+        "UPDATE medical_records SET patient_id = ?, doctor_notes = ?, nurse_notes = ?, diagnosis = ?, prescription = ? WHERE id = ?",
+        params![
+            record.patient_id,
+            record.doctor_notes,
+            record.nurse_notes,
+            record.diagnosis,
+            record.prescription,
+            record.id
+        ],
+    )?;
+    Ok(())
+}
+
+/// Deletes a medical record from the database.
+///
+/// This function deletes a specific medical record from the `medical_records` table.
+///
+/// # Arguments
+///
+/// * `record_id` - The ID of the medical record to delete.
+///
+/// # Errors
+///
+/// Returns an error if the database cannot be opened or the deletion fails.
+///
+/// # Side Effects
+///
+/// Deletes a row from the `medical_records` table.
+///
+/// # Postconditions
+///
+/// The medical record with the specified `record_id` is removed from the database.
+pub fn delete_medical_record(record_id: i64) -> Result<()> {
+    let conn = Connection::open("rustoria.db")?;
+    conn.execute(
+        "DELETE FROM medical_records WHERE id = ?",
+        params![record_id],
+    )?;
+    Ok(())
 }
