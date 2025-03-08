@@ -20,7 +20,6 @@ use ratatui::{prelude::*, widgets::*};
 use std::time::{Duration, Instant};
 use time::macros::format_description;
 use time::Date;
-use time::Weekday;
 
 /// Represents the different shifts available.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -987,41 +986,60 @@ impl AssignStaff {
 
         // Get current date if no date is selected
         let today = time::OffsetDateTime::now_utc().date();
-        let selected_date = self.selected_date.unwrap_or(today);
+        let mut selected_date = self.selected_date.unwrap_or(today);
+
+        // Find the first available (non-past) date for initial selection
+        let mut first_available_date = today;
+        for _ in 0..365 {
+            // Check up to a year ahead
+            if first_available_date >= today {
+                break; // Found a non-past date
+            }
+            if let Some(next_day) = first_available_date.next_day() {
+                first_available_date = next_day;
+            } else {
+                break; // Shouldn't happen, but handle edge case.
+            }
+        }
+        // If selected_date is in the past, use the first available date
+        if selected_date < today {
+            selected_date = first_available_date;
+        }
 
         // Create calendar events store for styling dates
         let mut events = CalendarEventStore::default();
 
-        // Highlight the selected date with yellow background and dark text
+        // Highlight the selected date with purplish background and white text
         events.add(
             selected_date,
             Style::default()
-                .fg(Color::Rgb(20, 20, 50)) // Dark text color for contrast
-                .bg(Color::Rgb(250, 250, 110)) // Yellow background
+                .fg(Color::Rgb(250, 250, 250)) // White text color for contrast
+                .bg(Color::Rgb(150, 80, 180)) // Purplish background
                 .add_modifier(Modifier::BOLD),
         );
 
-        // Highlight today with more visible green background
+        // Highlight today with green background and white text, regardless of weekday
         events.add(
             today,
             Style::default()
-                .fg(Color::Rgb(230, 230, 250)) // Light text
+                .fg(Color::Rgb(250, 250, 250)) // White text
                 .bg(Color::Rgb(40, 120, 50)) // Green background
                 .add_modifier(Modifier::BOLD),
         );
 
-        // Highlight already assigned shifts with more visible background colors
+        // Highlight already assigned shifts with cyan background and dark text
         for (date, shift) in &self.staff_assignments {
             let shift_style = match shift.as_str() {
                 "Morning" => Style::default()
-                    .fg(Color::Rgb(250, 250, 250)) // White text
-                    .bg(Color::Rgb(180, 140, 30)), // Amber background
+                    .fg(Color::Rgb(20, 20, 50)) // Dark text
+                    .bg(Color::Cyan), // Cyan background
                 "Afternoon" => Style::default()
-                    .fg(Color::Rgb(250, 250, 250)) // White text
-                    .bg(Color::Rgb(180, 70, 40)), // Orange-red background
+                    .fg(Color::Rgb(20, 20, 50)) // Dark text
+                    .bg(Color::Cyan), // Cyan background
                 "Night" => Style::default()
-                    .fg(Color::Rgb(250, 250, 250)) // White text
-                    .bg(Color::Rgb(50, 60, 150)), // Blue background
+                    .fg(Color::Rgb(20, 20, 50)) // Dark text
+                    .bg(Color::Cyan), // Cyan background
+
                 _ => Style::default()
                     .fg(Color::Rgb(220, 220, 240))
                     .bg(Color::Rgb(40, 40, 40)),
@@ -1029,22 +1047,14 @@ impl AssignStaff {
             events.add(*date, shift_style);
         }
 
-        // Highlight weekends
-        let weekend_style = Style::default()
-            .fg(Color::Rgb(255, 100, 100))
-            .bg(Color::Rgb(35, 25, 25)); // Dark red background
-
-        // Default style for dates
+        // Default style for dates, and past dates.
         let default_style = Style::default()
             .fg(Color::Rgb(220, 220, 240))
             .bg(Color::Rgb(26, 26, 36));
 
-        // Common date styling logic for all months
-        let apply_date_styles = |date: Date, events: &mut CalendarEventStore| {
-            if date.weekday() == Weekday::Saturday || date.weekday() == Weekday::Sunday {
-                events.add(date, weekend_style);
-            }
-        };
+        let past_date_style = Style::default() // Style for past dates
+            .fg(Color::DarkGray) // DarkGray Text
+            .bg(Color::Rgb(26, 26, 36));
 
         // Calculate dates for 6 months
         let mut month_dates = Vec::new();
@@ -1063,6 +1073,12 @@ impl AssignStaff {
                 month_dates.push(current_date);
             }
         }
+        // Apply styles for dates
+        let apply_date_styles = |date: Date, events: &mut CalendarEventStore| {
+            if date < today {
+                events.add(date, past_date_style); // Apply past date style
+            }
+        };
 
         // Apply styling to dates in all months (spanning about 6 months)
         let start_date = today.checked_sub(time::Duration::days(60)).unwrap_or(today);
@@ -1113,9 +1129,10 @@ impl AssignStaff {
                         .add_modifier(Modifier::BOLD),
                 )
                 .show_weekdays_header(
+                    // Weekdays header style
                     Style::default()
-                        .fg(Color::Rgb(180, 180, 250))
-                        .bg(Color::Rgb(40, 40, 60))
+                        .fg(Color::Black) // black text
+                        .bg(Color::Rgb(250, 250, 110)) // Yellow background
                         .add_modifier(Modifier::BOLD),
                 )
                 .default_style(default_style);
@@ -1155,9 +1172,10 @@ impl AssignStaff {
                         .add_modifier(Modifier::BOLD),
                 )
                 .show_weekdays_header(
+                    // Weekdays header style
                     Style::default()
-                        .fg(Color::Rgb(180, 180, 250))
-                        .bg(Color::Rgb(40, 40, 60))
+                        .fg(Color::Black) // Black text
+                        .bg(Color::Rgb(250, 250, 110)) // Yellow background
                         .add_modifier(Modifier::BOLD),
                 )
                 .default_style(default_style);
@@ -1169,32 +1187,33 @@ impl AssignStaff {
         let legend_layout = Layout::default()
             .direction(Direction::Horizontal)
             .constraints([
-                Constraint::Percentage(25),
-                Constraint::Percentage(25),
-                Constraint::Percentage(25),
-                Constraint::Percentage(25),
+                Constraint::Percentage(20),
+                Constraint::Percentage(20),
+                Constraint::Percentage(20),
+                Constraint::Percentage(20),
+                Constraint::Percentage(20),
             ])
             .split(layout[2]);
 
         let today_legend = Paragraph::new(" ● Today ")
-            .style(Style::default().fg(Color::Rgb(40, 120, 50)))
+            .style(Style::default().fg(Color::Rgb(40, 120, 50))) // Green text
             .alignment(Alignment::Center);
 
         let selected_legend = Paragraph::new(" ● Selected ")
-            .style(Style::default().fg(Color::Rgb(250, 250, 110)))
+            .style(Style::default().fg(Color::Rgb(150, 80, 180))) // Purplish text
             .alignment(Alignment::Center);
 
-        let weekend_legend = Paragraph::new(" ● Weekend ")
-            .style(Style::default().fg(Color::Rgb(255, 100, 100)))
+        let weekend_legend = Paragraph::new(" ● Weekend ") // weekend
+            .style(Style::default().fg(Color::Rgb(255, 100, 100))) // Red text
             .alignment(Alignment::Center);
 
         let assigned_legend = Paragraph::new(" ● Assigned ")
-            .style(Style::default().fg(Color::Rgb(180, 70, 40)))
+            .style(Style::default().fg(Color::Cyan)) // cyan text
             .alignment(Alignment::Center);
 
         frame.render_widget(today_legend, legend_layout[0]);
         frame.render_widget(selected_legend, legend_layout[1]);
-        frame.render_widget(weekend_legend, legend_layout[2]);
+        frame.render_widget(weekend_legend, legend_layout[2]); // Add weekend
         frame.render_widget(assigned_legend, legend_layout[3]);
 
         // Display error message
