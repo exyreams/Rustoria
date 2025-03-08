@@ -51,6 +51,7 @@ pub struct UpdatePatient {
     show_confirmation: bool,      // Whether to show confirmation dialog
     confirmation_message: String, // Message in the confirmation dialog
     confirmed_action: Option<ConfirmAction>, // Action to perform if confirmed
+    confirmation_selected: usize, // Which confirmation button is selected (0 for Yes, 1 for No)
 }
 
 // Field constants
@@ -118,6 +119,7 @@ impl UpdatePatient {
             show_confirmation: false,
             confirmation_message: String::new(),
             confirmed_action: None,
+            confirmation_selected: 0, // Default to "Yes"
         }
     }
 
@@ -268,6 +270,7 @@ impl UpdatePatient {
         self.show_confirmation = true;
         self.confirmation_message = message;
         self.confirmed_action = Some(action);
+        self.confirmation_selected = 0; // Default Yes
     }
 
     /// Update the patient in the database
@@ -304,23 +307,36 @@ impl UpdatePatient {
     }
 
     /// Handle input events for the component
+    ///
+    /// # Arguments
+    /// * `key` - The keyboard event to handle
+    ///
+    /// # Returns
+    /// * `Ok(Some(PatientAction))` - If the app should change screens
+    /// * `Ok(None)` - If no app-level action is needed
+    /// * `Err` - If an error occurred
     fn handle_input(&mut self, key: KeyEvent) -> Result<Option<PatientAction>> {
         self.check_timeouts();
 
         // Handle confirmation dialog if it's shown
         if self.show_confirmation {
             match key.code {
-                KeyCode::Char('y') | KeyCode::Char('Y') => {
-                    self.show_confirmation = false;
-
-                    if let Some(ConfirmAction::UpdatePatient) = self.confirmed_action.take() {
-                        let _ = self.update_patient();
-                    }
+                KeyCode::Left | KeyCode::Right => {
+                    self.confirmation_selected = 1 - self.confirmation_selected;
                 }
-                KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc => {
+                KeyCode::Enter => {
+                    if self.confirmation_selected == 0 {
+                        if let Some(ConfirmAction::UpdatePatient) = self.confirmed_action.take() {
+                            let _ = self.update_patient();
+                        }
+                    }
+                    self.show_confirmation = false;
+                }
+                KeyCode::Esc => {
                     self.show_confirmation = false;
                     self.confirmed_action = None;
                 }
+
                 _ => {}
             }
             return Ok(None);
@@ -463,7 +479,7 @@ impl UpdatePatient {
             {
                 // Save (update) patient with confirmation
                 self.show_confirmation(
-                    "Are you sure you want to update this patient? (y/n)".to_string(),
+                    "Are you sure you want to update this patient?".to_string(),
                     ConfirmAction::UpdatePatient,
                 );
             }
@@ -526,12 +542,24 @@ impl UpdatePatient {
 }
 
 impl Default for UpdatePatient {
+    /// Creates a default instance of the UpdatePatient component.
     fn default() -> Self {
         Self::new()
     }
 }
 
 impl Component for UpdatePatient {
+    /// Handles input events at the component level.
+    ///
+    /// Delegates to the component's own input handler.
+    ///
+    /// # Arguments
+    /// * `event` - The keyboard event to process
+    ///
+    /// # Returns
+    /// * `Ok(Some(SelectedApp))` - If the app should change screens
+    /// * `Ok(None)` - If no app-level action is needed
+    /// * `Err` - If an error occurred
     fn handle_input(&mut self, event: KeyEvent) -> Result<Option<SelectedApp>> {
         match self.handle_input(event)? {
             Some(PatientAction::BackToHome) => Ok(Some(crate::app::SelectedApp::None)),
@@ -540,6 +568,10 @@ impl Component for UpdatePatient {
         }
     }
 
+    /// Renders the update patients component to the frame.
+    ///
+    /// # Arguments
+    /// * `frame` - The frame to render the component on
     fn render(&self, frame: &mut Frame) {
         let area = frame.area();
         frame.render_widget(
@@ -950,55 +982,86 @@ impl UpdatePatient {
         frame.render_widget(help_paragraph, main_layout[4]);
     }
 
-    /// Render the confirmation dialog for actions like save
+    /// Render the confirmation dialog for actions like save.
     fn render_confirmation_dialog(&self, frame: &mut Frame, area: Rect) {
-        let dialog_area = centered_rect(60, 20, area);
+        let dialog_width = 50;
+        let dialog_height = 8;
+        let dialog_area = Rect::new(
+            (area.width.saturating_sub(dialog_width)) / 2,
+            (area.height.saturating_sub(dialog_height)) / 2,
+            dialog_width,
+            dialog_height,
+        );
+
+        // Clear just the dialog area
+        frame.render_widget(Clear, dialog_area);
 
         let dialog_block = Block::default()
+            .title(" Update Patient ")
+            .title_style(
+                Style::default()
+                    .fg(Color::Rgb(230, 230, 250))
+                    .add_modifier(Modifier::BOLD),
+            )
             .borders(Borders::ALL)
             .border_type(BorderType::Rounded)
-            .title(" Confirmation ")
-            .border_style(Style::default().fg(Color::Rgb(250, 250, 110)))
-            .style(Style::default().bg(Color::Rgb(40, 40, 60)));
+            .border_style(Style::default().fg(Color::Rgb(140, 140, 200)))
+            .style(Style::default().bg(Color::Rgb(30, 30, 46)));
 
-        frame.render_widget(Clear, dialog_area); // Clear the area for the dialog
-        frame.render_widget(dialog_block, dialog_area);
+        frame.render_widget(dialog_block.clone(), dialog_area);
 
-        let dialog_layout = Layout::default()
+        let inner_area = dialog_block.inner(dialog_area);
+        let content_layout = Layout::default()
             .direction(Direction::Vertical)
+            .margin(1)
+            .constraints([Constraint::Length(2), Constraint::Length(2)])
+            .split(inner_area);
+
+        let message = Paragraph::new(self.confirmation_message.as_str()) // Use the message
+            .style(Style::default().fg(Color::Rgb(220, 220, 240)))
+            .add_modifier(Modifier::BOLD)
+            .alignment(Alignment::Center);
+        frame.render_widget(message, content_layout[0]);
+
+        let buttons_layout = Layout::default()
+            .direction(Direction::Horizontal)
             .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
-            .margin(2)
-            .split(dialog_area);
+            .split(content_layout[1]);
 
-        let message = Paragraph::new(self.confirmation_message.as_str())
-            .style(Style::default().fg(Color::Rgb(220, 220, 240)))
-            .alignment(Alignment::Center);
-        frame.render_widget(message, dialog_layout[0]);
+        let yes_style = if self.confirmation_selected == 0 {
+            Style::default()
+                .fg(Color::Rgb(140, 219, 140))
+                .add_modifier(Modifier::BOLD)
+        } else {
+            Style::default().fg(Color::Rgb(180, 180, 200))
+        };
+        let no_style = if self.confirmation_selected == 1 {
+            Style::default()
+                .fg(Color::Rgb(255, 100, 100))
+                .add_modifier(Modifier::BOLD)
+        } else {
+            Style::default().fg(Color::Rgb(180, 180, 200))
+        };
 
-        let choices = Paragraph::new("Y: Yes | N: No")
-            .style(Style::default().fg(Color::Rgb(220, 220, 240)))
+        let yes_text = if self.confirmation_selected == 0 {
+            "► Yes ◄"
+        } else {
+            "  Yes  "
+        };
+        let no_text = if self.confirmation_selected == 1 {
+            "► No ◄"
+        } else {
+            "  No  "
+        };
+
+        let yes_button = Paragraph::new(yes_text)
+            .style(yes_style)
             .alignment(Alignment::Center);
-        frame.render_widget(choices, dialog_layout[1]);
+        let no_button = Paragraph::new(no_text)
+            .style(no_style)
+            .alignment(Alignment::Center);
+
+        frame.render_widget(yes_button, buttons_layout[0]);
+        frame.render_widget(no_button, buttons_layout[1]);
     }
-}
-
-// Helper function to create a centered rectangle
-fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
-    let popup_layout = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Percentage((100 - percent_y) / 2),
-            Constraint::Percentage(percent_y),
-            Constraint::Percentage((100 - percent_y) / 2),
-        ])
-        .split(r);
-
-    Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([
-            Constraint::Percentage((100 - percent_x) / 2),
-            Constraint::Percentage(percent_x),
-            Constraint::Percentage((100 - percent_x) / 2),
-        ])
-        .split(popup_layout[1])[1]
 }

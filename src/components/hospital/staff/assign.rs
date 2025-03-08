@@ -73,6 +73,8 @@ pub struct AssignStaff {
     selected_shift: Option<Shift>,
     /// Whether the confirmation dialog is visible.
     show_confirmation: bool,
+    // Which confirmation button is selected (0 for Yes, 1 for No)
+    confirmation_selected: usize,
     /// Error message, if any.
     error_message: Option<String>,
     /// Timer for error message display.
@@ -110,7 +112,8 @@ impl AssignStaff {
             success_message: None,
             success_timer: None,
             staff_assignments: Vec::new(),
-            focused_month: 0, // Start with the first month focused
+            focused_month: 0,         // Start with the first month focused
+            confirmation_selected: 0, // Default to "Yes"
         }
     }
 
@@ -249,7 +252,6 @@ impl AssignStaff {
         );
     }
 
-    /// Handles arrow key navigation within date selection, keeping within current month
     /// Handles arrow key navigation within date selection, keeping within current month
     fn navigate_date(&mut self, direction: &str) {
         if let Some(date) = self.selected_date {
@@ -460,14 +462,20 @@ impl AssignStaff {
     fn handle_input(&mut self, key: KeyEvent) -> Result<Option<SelectedApp>> {
         self.check_timeouts();
 
+        // Handle confirmation dialog if it's shown
         if self.show_confirmation {
             match key.code {
-                KeyCode::Char('y') | KeyCode::Char('Y') => {
-                    self.show_confirmation = false;
-                    let _ = self.assign_shift();
-                    return Ok(None);
+                KeyCode::Left | KeyCode::Right => {
+                    self.confirmation_selected = 1 - self.confirmation_selected;
                 }
-                KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc => {
+                KeyCode::Enter => {
+                    if self.confirmation_selected == 0 {
+                        // Yes - assign
+                        let _ = self.assign_shift();
+                    }
+                    self.show_confirmation = false;
+                }
+                KeyCode::Esc => {
                     self.show_confirmation = false;
                 }
                 _ => {}
@@ -1585,7 +1593,7 @@ impl AssignStaff {
     fn render_confirmation_dialog(&self, frame: &mut Frame) {
         let area = frame.area();
         let dialog_width = 50;
-        let dialog_height = 10;
+        let dialog_height = 8; // Corrected height
 
         let dialog_area = Rect::new(
             (area.width.saturating_sub(dialog_width)) / 2,
@@ -1616,9 +1624,10 @@ impl AssignStaff {
             .direction(Direction::Vertical)
             .margin(1)
             .constraints([
-                Constraint::Length(4), // Increased height for details
-                Constraint::Length(2),
+                Constraint::Length(4), //  Height for message
+                Constraint::Length(2), //  Yes/No buttons
             ])
+            .spacing(1)
             .split(inner_area);
 
         // Confirmation message with details
@@ -1626,7 +1635,7 @@ impl AssignStaff {
             .selected_staff
             .as_ref()
             .map(|s| s.name.clone())
-            .unwrap_or("Unknown".to_string());
+            .unwrap_or_else(|| "Unknown".to_string()); // Use unwrap_or_else for consistency
 
         let date_str = self
             .selected_date
@@ -1634,7 +1643,7 @@ impl AssignStaff {
                 d.format(&format_description!("[year]-[month]-[day]"))
                     .unwrap_or_else(|_| "Unknown".to_string())
             })
-            .unwrap_or_else(|| "Unknown".to_string());
+            .unwrap_or_else(|| "Unknown".to_string()); // Use unwrap_or_else
 
         let (shift_str, shift_time) = match self.selected_shift {
             Some(Shift::Morning) => ("🌅 Morning", "6am - 2pm"),
@@ -1644,20 +1653,61 @@ impl AssignStaff {
         };
 
         let message_text = format!(
-            "Assign {} ({}) shift to\n{} on {}?\n(y/n)",
+            // Removed extra newline, more concise
+            "Assign {} ({}) shift to {} on {}?",
             shift_str, shift_time, staff_name, date_str
         );
 
         let message = Paragraph::new(message_text)
             .style(Style::default().fg(Color::Rgb(220, 220, 240)))
             .alignment(Alignment::Center)
-            .wrap(Wrap { trim: true });
+            .wrap(Wrap { trim: true }); // Ensure wrapping
         frame.render_widget(message, content_layout[0]);
 
-        // Yes/No options
-        let choices = Paragraph::new("Y: Yes | N: No")
-            .style(Style::default().fg(Color::Rgb(220, 220, 240)))
+        // Yes/No buttons with styling (like delete.rs and update.rs)
+        let buttons_layout = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
+            .split(content_layout[1]);
+
+        // Determine button styles based on selection
+        let yes_style = if self.confirmation_selected == 0 {
+            Style::default()
+                .fg(Color::Rgb(140, 219, 140)) // Green for selected "Yes"
+                .add_modifier(Modifier::BOLD)
+        } else {
+            Style::default().fg(Color::Rgb(180, 180, 200)) // Default color
+        };
+
+        let no_style = if self.confirmation_selected == 1 {
+            Style::default()
+                .fg(Color::Rgb(255, 100, 100)) // Red for selected "No"
+                .add_modifier(Modifier::BOLD)
+        } else {
+            Style::default().fg(Color::Rgb(180, 180, 200)) // Default color
+        };
+
+        // Button text with selection indicator
+        let yes_text = if self.confirmation_selected == 0 {
+            "► Yes ◄" // Highlighted "Yes"
+        } else {
+            "  Yes  "
+        };
+
+        let no_text = if self.confirmation_selected == 1 {
+            "► No ◄" // Highlighted "No"
+        } else {
+            "  No  "
+        };
+
+        let yes_button = Paragraph::new(yes_text)
+            .style(yes_style)
             .alignment(Alignment::Center);
-        frame.render_widget(choices, content_layout[1]);
+        let no_button = Paragraph::new(no_text)
+            .style(no_style)
+            .alignment(Alignment::Center);
+
+        frame.render_widget(yes_button, buttons_layout[0]);
+        frame.render_widget(no_button, buttons_layout[1]);
     }
 }
