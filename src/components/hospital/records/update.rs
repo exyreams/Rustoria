@@ -6,11 +6,12 @@
 use crate::app::SelectedApp;
 use crate::components::Component;
 use crate::db;
-use crate::models::MedicalRecord;
+use crate::models::{MedicalRecord, Patient};
 use crate::tui::Frame;
 use anyhow::Result;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::{prelude::*, widgets::*};
+use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
 /// `ConfirmAction` Enum for confirmation dialog actions.
@@ -66,6 +67,7 @@ enum UpdateState {
 pub struct UpdateRecord {
     all_records: Vec<MedicalRecord>,      // All records for selection
     filtered_records: Vec<MedicalRecord>, // Filtered records for selection
+    patients: HashMap<i64, Patient>,      // Map of patient ID to patient info
     search_input: String,                 // Search input
     is_searching: bool,                   // Search mode flag
     table_state: TableState,              // Table selection state
@@ -115,6 +117,7 @@ impl UpdateRecord {
         Self {
             all_records: Vec::new(),
             filtered_records: Vec::new(),
+            patients: HashMap::new(),
             search_input: String::new(),
             is_searching: false,
             table_state: selection_state,
@@ -155,8 +158,53 @@ impl UpdateRecord {
     /// Returns an `anyhow::Result` which will contain an error if the database query fails.
     pub fn fetch_records(&mut self) -> Result<()> {
         self.all_records = db::get_all_medical_records()?;
+        self.fetch_patients_data()?;
         self.filter_records();
         Ok(())
+    }
+
+    /// Fetches patient data for all patient IDs in the records.
+    ///
+    /// This method retrieves patient information for all patient IDs in the records and
+    /// stores it in the patients HashMap for quick lookup.
+    ///
+    /// # Errors
+    ///
+    /// Returns an `anyhow::Result` which will contain an error if the database query fails.
+    fn fetch_patients_data(&mut self) -> Result<()> {
+        // Clear existing patients
+        self.patients.clear();
+
+        // Get all patients from database
+        match db::get_all_patients() {
+            Ok(all_patients) => {
+                // Create map of patient ID to patient data
+                for patient in all_patients {
+                    self.patients.insert(patient.id, patient);
+                }
+                Ok(())
+            }
+            Err(e) => {
+                self.set_error(format!("Failed to fetch patient data: {}", e));
+                Ok(()) // Continue program but with error message
+            }
+        }
+    }
+
+    /// Returns the patient information for a given patient ID.
+    ///
+    /// This function retrieves the patient information for the specified patient ID from the `patients` HashMap.
+    ///
+    /// # Parameters
+    ///
+    /// - `patient_id`: The ID of the patient to retrieve information for.
+    ///
+    /// # Returns
+    ///
+    /// - `Some(&Patient)` if the patient information exists.
+    /// - `None` if the patient information does not exist.
+    fn get_patient(&self, patient_id: i64) -> Option<&Patient> {
+        self.patients.get(&patient_id)
     }
 
     /// Filters records based on the search term in the `search_input`.
@@ -173,9 +221,19 @@ impl UpdateRecord {
                 .all_records
                 .iter()
                 .filter(|r| {
+                    // Check if patient name matches search term
+                    let patient_name_match = if let Some(patient) = self.patients.get(&r.patient_id)
+                    {
+                        patient.first_name.to_lowercase().contains(&search_term)
+                            || patient.last_name.to_lowercase().contains(&search_term)
+                    } else {
+                        false
+                    };
+
                     r.patient_id.to_string().contains(&search_term)
                         || r.doctor_notes.to_lowercase().contains(&search_term)
                         || r.diagnosis.to_lowercase().contains(&search_term)
+                        || patient_name_match
                 })
                 .cloned()
                 .collect();
@@ -763,9 +821,16 @@ impl UpdateRecord {
                 .filtered_records
                 .iter()
                 .map(|r| {
+                    // Get patient name from patients HashMap
+                    let (first_name, last_name) = match self.get_patient(r.patient_id) {
+                        Some(patient) => (patient.first_name.clone(), patient.last_name.clone()),
+                        None => ("Unknown".to_string(), "Patient".to_string()),
+                    };
+
                     Row::new(vec![
                         r.id.to_string(),
-                        r.patient_id.to_string(),
+                        first_name,
+                        last_name,
                         r.diagnosis.clone(),
                     ])
                     .style(Style::default().fg(Color::Rgb(220, 220, 240)))
@@ -779,7 +844,7 @@ impl UpdateRecord {
                 .bg(Color::Rgb(40, 40, 60))
                 .add_modifier(Modifier::BOLD);
 
-            let header = Row::new(vec!["ID", "Patient ID", "Diagnosis"])
+            let header = Row::new(vec!["ID", "First Name", "Last Name", "Diagnosis"])
                 .style(
                     Style::default()
                         .fg(Color::Rgb(220, 220, 240))
@@ -789,9 +854,10 @@ impl UpdateRecord {
                 .height(1);
 
             let widths = [
-                Constraint::Percentage(15),
-                Constraint::Percentage(25),
-                Constraint::Percentage(60),
+                Constraint::Percentage(10),
+                Constraint::Percentage(20),
+                Constraint::Percentage(20),
+                Constraint::Percentage(50),
             ];
 
             let records_table = Table::new(records_rows, widths)
