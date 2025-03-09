@@ -1,7 +1,10 @@
-//! `StoreRecord` - Component for adding new medical records to the hospital application.
+//! `StoreRecord` - Component for adding new medical records, with separate patient selection and record entry screens.
 //!
-//! This module provides the `StoreRecord` struct, a component responsible for collecting patient information and storing new medical records in the database. It encapsulates the form fields, validation logic, and database interaction required to create new medical records, and exposes the `StoreRecord` struct.
-//! The primary type exposed is `StoreRecord`, which implements the `Component` trait.
+//! This module provides the `StoreRecord` struct, a UI component that allows users to add new medical records.
+//! It displays a searchable, selectable list of patients.  Once a patient is selected,
+//! form fields appear for entering the medical record details (doctor's notes, nurse's notes,
+//! diagnosis, and prescription).  This replaces the direct patient ID input with a more
+//! user-friendly selection process.
 
 use crate::app::SelectedApp;
 use crate::components::Component;
@@ -13,144 +16,157 @@ use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{prelude::*, widgets::*};
 use std::time::{Duration, Instant};
 
-/// Component to add a new medical record.
-///
-/// `StoreRecord` is a UI component used within the hospital application to capture and store information for new medical records. It presents a form with fields for patient ID, doctor's notes, optional nurse's notes, diagnosis, and an optional prescription. Upon submission, the component validates the input, checks for patient existence, and saves the new medical record to the database.
-/// This component uses the `Component` trait to handle user input and render its UI. It manages state such as input field values, focus, error messages, and success messages.
-///
-/// # Fields
-///
-/// *   `patient_id_input`:  The text input for the patient's ID.
-/// *   `doctor_notes`: The text input for the doctor's notes.
-/// *   `nurse_notes`: The optional text input for the nurse's notes.
-/// *   `diagnosis`: The text input for the diagnosis.
-/// *   `prescription`: The optional text input for the prescription.
-/// *   `focus_index`: The index of the currently focused input field.
-/// *   `error_message`: An optional string containing an error message to display to the user.
-/// *   `error_timer`:  An optional `Instant` used to time the display of error messages.
-/// *   `success_message`:  An optional string containing a success message to display to the user.
-/// *   `success_timer`: An optional `Instant` used to time the display of success messages.
-/// *   `all_patients`: A vector containing all patients for patient ID validation.
-pub struct StoreRecord {
-    patient_id_input: String,        // Input for patient ID
-    doctor_notes: String,            // Doctor's notes
-    nurse_notes: Option<String>,     // Optional nurse's notes
-    diagnosis: String,               // Diagnosis
-    prescription: Option<String>,    // Optional prescription
-    focus_index: usize,              // Track which input field has focus
-    error_message: Option<String>,   // Error message, if any
-    error_timer: Option<Instant>,    // Timer for error message display
-    success_message: Option<String>, // Success message, if any
-    success_timer: Option<Instant>,  // Timer for success message display
-    all_patients: Vec<Patient>,      // List of all patients for ID validation
+/// Represents the different states of the StoreRecord component.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StoreRecordState {
+    SelectingPatient,
+    EnteringDetails,
 }
 
-const INPUT_FIELDS: usize = 5; // Number of input fields + "Back"
+const PATIENT_SELECTION: usize = 0; // Focus index for patient selection
+const INPUT_FIELDS: usize = 4; // Number of input fields (doctor_notes, nurse_notes, diagnosis, prescription)
+const SUBMIT_BUTTON: usize = 4; // Focus index for Submit button.
+const BACK_BUTTON: usize = 5; // Focus index for the "Back" button
+
+/// Component to add a new medical record, with integrated patient selection.
+pub struct StoreRecord {
+    all_patients: Vec<Patient>,        // All patients (for selection)
+    filtered_patients: Vec<Patient>,   // Filtered patients (for selection)
+    selected_patient: Option<Patient>, // The currently selected patient
+    search_input: String,              // Search input for patient filtering
+    is_searching: bool,                // Flag to indicate search mode
+    table_state: TableState,           // State for the patient selection table
+    doctor_notes: String,              // Doctor's notes
+    nurse_notes: Option<String>,       // Optional nurse's notes
+    diagnosis: String,                 // Diagnosis
+    prescription: Option<String>,      // Optional prescription
+    focus_index: usize,                // Track which input field has focus
+    state: StoreRecordState,           // The current state of the component
+    error_message: Option<String>,     // Error message, if any
+    error_timer: Option<Instant>,      // Timer for error message display
+    success_message: Option<String>,   // Success message, if any
+    success_timer: Option<Instant>,    // Timer for success message display
+}
 
 impl Default for StoreRecord {
-    /// Creates a default `StoreRecord` component with initialized fields.
-    ///
-    /// This function is used when a new instance of `StoreRecord` is created without specifying initial values. It sets default values for all input fields, initializes the focus index to the first input, and clears any existing error or success messages. The patient list is initialized as an empty vector.
-    ///
-    /// # Returns
-    ///
-    /// *   `Self`: A new `StoreRecord` instance with default values.
     fn default() -> Self {
+        let mut table_state = TableState::default();
+        table_state.select(Some(0)); // Select first by default
         StoreRecord {
-            patient_id_input: String::new(),
+            all_patients: Vec::new(),
+            filtered_patients: Vec::new(),
+            selected_patient: None,
+            search_input: String::new(),
+            is_searching: false,
+            table_state,
             doctor_notes: String::new(),
             nurse_notes: None,
             diagnosis: String::new(),
             prescription: None,
-            focus_index: 0,
+            focus_index: PATIENT_SELECTION, // Start with patient selection
+            state: StoreRecordState::SelectingPatient, // NEW: Start in selection state.
             error_message: None,
             error_timer: None,
             success_message: None,
             success_timer: None,
-            all_patients: Vec::new(), // Initialize
         }
     }
 }
 
 impl StoreRecord {
     /// Creates a new `StoreRecord` component.
-    ///
-    /// This function constructs a new `StoreRecord` component using the `default()` method. This ensures that the component starts with clean, initialized state.
-    ///
-    /// # Returns
-    ///
-    /// *   `Self`: A new `StoreRecord` instance.
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// Loads all patients from the database.
-    ///
-    /// This function retrieves all patient records from the database and stores them in the `all_patients` field. This data is used to validate the patient ID entered by the user when creating a new medical record.
-    ///
-    /// # Errors
-    ///
-    /// This function returns an `anyhow::Result` which will contain an error if the database query fails.
-    ///
-    /// # Side effects
-    ///
-    /// *   Updates the `all_patients` field with the list of patients fetched from the database.
+    /// Loads all patients from the database for the selection table.
     pub fn load_patients(&mut self) -> Result<()> {
         self.all_patients = db::get_all_patients()?;
+        self.filter_patients(); // Initial filtering
         Ok(())
     }
 
+    /// Filters the patient list based on the `search_input`.
+    fn filter_patients(&mut self) {
+        if self.search_input.is_empty() {
+            self.filtered_patients = self.all_patients.clone();
+        } else {
+            let search_term = self.search_input.to_lowercase();
+            self.filtered_patients = self
+                .all_patients
+                .iter()
+                .filter(|p| {
+                    p.first_name.to_lowercase().contains(&search_term)
+                        || p.last_name.to_lowercase().contains(&search_term)
+                        || p.id.to_string().contains(&search_term)
+                })
+                .cloned()
+                .collect();
+        }
+
+        // Reset selection in the table
+        if !self.filtered_patients.is_empty() {
+            self.table_state.select(Some(0));
+        } else {
+            self.table_state.select(None); // clear, if no patients
+        }
+    }
+
+    /// Selects the next patient in the table.
+    fn select_next_patient(&mut self) {
+        if self.filtered_patients.is_empty() {
+            return;
+        }
+        let i = match self.table_state.selected() {
+            Some(i) => {
+                if i >= self.filtered_patients.len() - 1 {
+                    0
+                } else {
+                    i + 1
+                }
+            }
+            None => 0,
+        };
+        self.table_state.select(Some(i));
+    }
+
+    /// Selects the previous patient in the table.
+    fn select_previous_patient(&mut self) {
+        if self.filtered_patients.is_empty() {
+            return;
+        }
+        let i = match self.table_state.selected() {
+            Some(i) => {
+                if i == 0 {
+                    self.filtered_patients.len() - 1
+                } else {
+                    i - 1
+                }
+            }
+            None => 0,
+        };
+        self.table_state.select(Some(i));
+    }
+
     /// Clears the current error message.
-    ///
-    /// This function removes the current error message and resets the error timer. This is typically called after an error has been handled or when transitioning to a new state.
-    ///
-    /// # Side effects
-    ///
-    /// *   Sets `error_message` to `None`.
-    /// *   Sets `error_timer` to `None`.
     fn clear_error(&mut self) {
         self.error_message = None;
         self.error_timer = None;
     }
 
-    /// Sets an error message.
-    ///
-    /// This function sets an error message to be displayed to the user and starts a timer to automatically clear the message after a short duration.  It's used to provide feedback to the user when an error occurs during input validation or database operations.
-    ///
-    /// # Parameters
-    ///
-    /// *   `message`:  A `String` containing the error message to display.
-    ///
-    /// # Side effects
-    ///
-    /// *   Sets `error_message` to `Some(message)`.
-    /// *   Sets `error_timer` to `Some(Instant::now())`.
+    /// Sets an error message to display to the user.
     fn set_error(&mut self, message: String) {
         self.error_message = Some(message);
         self.error_timer = Some(Instant::now());
     }
 
     /// Clears the success message.
-    ///
-    /// This function clears the success message and resets the associated timer. It is used to remove the success message after its display duration has elapsed.
-    ///
-    /// # Side effects
-    ///
-    /// *   Sets `success_message` to `None`.
-    /// *   Sets `success_timer` to `None`.
     fn clear_success(&mut self) {
         self.success_message = None;
         self.success_timer = None;
     }
 
     /// Checks and clears the error message if its timeout has expired.
-    ///
-    /// This function checks if the error message has been displayed for longer than 5 seconds. If the timeout has expired, it clears the error message using the `clear_error()` method.
-    /// This ensures that error messages are displayed for a reasonable duration and do not persist indefinitely.
-    ///
-    /// # Side effects
-    ///
-    /// *   Calls `clear_error()` if the error message has timed out.
     pub fn check_error_timeout(&mut self) {
         if let Some(timer) = self.error_timer {
             if timer.elapsed() > Duration::from_secs(5) {
@@ -160,13 +176,6 @@ impl StoreRecord {
     }
 
     /// Checks and clears the success message if its timeout has expired.
-    ///
-    /// This function checks if the success message has been displayed for longer than 5 seconds. If the timeout has expired, it clears the success message using the `clear_success()` method.
-    /// This ensures that success messages are displayed for a reasonable duration and do not persist indefinitely.
-    ///
-    /// # Side effects
-    ///
-    /// *   Calls `clear_success()` if the success message has timed out.
     pub fn check_success_timeout(&mut self) {
         if let Some(timer) = self.success_timer {
             if timer.elapsed() > Duration::from_secs(5) {
@@ -175,210 +184,289 @@ impl StoreRecord {
         }
     }
 
-    /// Handles user input events.
-    ///
-    /// This function processes user input events, such as key presses, to update the component's state. It handles input for the text fields, navigation between fields, and the submission or cancellation of the form.
-    ///
-    /// # Parameters
-    ///
-    /// *   `key`:  A `KeyEvent` representing the user's key press.
-    ///
-    /// # Returns
-    ///
-    /// *   `Result<Option<SelectedApp>>`: Returns `Ok(Some(SelectedApp::None))` to indicate that the user wants to return to the previous screen on pressing Escape, or `Ok(None)` if the input was handled within the component and no navigation is required.
-    ///
-    /// # Errors
-    ///
-    /// This function does not directly return errors, but it calls other functions that might return errors (e.g., database interaction).
-    ///
-    /// # Side effects
-    ///
-    /// *   Modifies the internal state of the component based on user input, including updating the values of input fields, changing the focus, and displaying or clearing error and success messages.
-    /// *   May call the `db::create_medical_record` function to save a new record to the database, which can result in a database operation.
+    /// Handles user input events, including patient selection and form input.
     pub fn handle_input(&mut self, key: KeyEvent) -> Result<Option<SelectedApp>> {
         self.check_error_timeout();
         self.check_success_timeout();
 
-        match key.code {
-            KeyCode::Char(c) => match self.focus_index {
-                0 => self.patient_id_input.push(c),
-                1 => self.doctor_notes.push(c),
-                2 => {
-                    if let Some(ref mut notes) = self.nurse_notes {
-                        notes.push(c);
-                    } else {
-                        self.nurse_notes = Some(c.to_string());
+        match self.state {
+            StoreRecordState::SelectingPatient => {
+                match key.code {
+                    // Search mode handling
+                    KeyCode::Char(c) if self.is_searching => {
+                        self.search_input.push(c);
+                        self.filter_patients();
+                        self.clear_error();
                     }
-                }
-                3 => self.diagnosis.push(c),
-                4 => {
-                    if let Some(ref mut prescription) = self.prescription {
-                        prescription.push(c);
-                    } else {
-                        self.prescription = Some(c.to_string());
+                    KeyCode::Backspace if self.is_searching => {
+                        self.search_input.pop();
+                        self.filter_patients();
+                        self.clear_error();
                     }
-                }
-                _ => {}
-            },
-            KeyCode::Backspace => match self.focus_index {
-                0 => {
-                    self.patient_id_input.pop();
-                }
-                1 => {
-                    self.doctor_notes.pop();
-                }
-                2 => {
-                    if let Some(notes) = self.nurse_notes.as_mut() {
-                        notes.pop();
+                    KeyCode::Down if self.is_searching && !self.filtered_patients.is_empty() => {
+                        self.is_searching = false;
+                        self.table_state.select(Some(0)); // Move to table
                     }
-                }
-                3 => {
-                    self.diagnosis.pop();
-                }
-                4 => {
-                    if let Some(prescription) = self.prescription.as_mut() {
-                        prescription.pop();
+                    KeyCode::Esc if self.is_searching => {
+                        self.is_searching = false; // Exit search mode
+                        self.search_input.clear();
+                        self.filter_patients();
                     }
-                }
-                _ => {}
-            },
-            KeyCode::Tab => {
-                if self.focus_index <= 4 {
-                    self.focus_index = INPUT_FIELDS; // Jump to submit
-                } else if self.focus_index == INPUT_FIELDS {
-                    self.focus_index = INPUT_FIELDS + 1; // Jump to Back
-                } else {
-                    self.focus_index = 0;
-                }
-            }
-            KeyCode::Down => {
-                self.focus_index = (self.focus_index + 1) % (INPUT_FIELDS + 2);
-            }
-            KeyCode::Up => {
-                self.focus_index = (self.focus_index + INPUT_FIELDS + 1) % (INPUT_FIELDS + 2);
-            }
-            KeyCode::Enter => {
-                if self.focus_index == INPUT_FIELDS + 1 {
-                    // "Back" button
-                    return Ok(Some(SelectedApp::None));
-                } else if self.focus_index == INPUT_FIELDS {
-                    // "Submit" button
-                    if self.patient_id_input.is_empty() {
-                        self.set_error("Patient ID cannot be empty".to_string());
-                        return Ok(None);
-                    }
-                    if self.doctor_notes.is_empty() {
-                        self.set_error("Doctor's Notes cannot be empty".to_string());
-                        return Ok(None);
-                    }
-                    if self.diagnosis.is_empty() {
-                        self.set_error("Diagnosis cannot be empty".to_string());
-                        return Ok(None);
+                    KeyCode::Char('/') | KeyCode::Char('s') | KeyCode::Char('S')
+                        if !self.is_searching =>
+                    {
+                        self.is_searching = true;
                     }
 
-                    // Validate Patient ID (check if it exists)
-                    let patient_id = match self.patient_id_input.parse::<i64>() {
-                        Ok(id) => id,
-                        Err(_) => {
-                            self.set_error("Invalid Patient ID format.".to_string());
+                    KeyCode::Up => self.select_previous_patient(),
+                    KeyCode::Down => self.select_next_patient(),
+                    KeyCode::Tab => {
+                        // Only Back button in this state
+                        self.focus_index = if self.focus_index == PATIENT_SELECTION {
+                            BACK_BUTTON
+                        } else {
+                            PATIENT_SELECTION
+                        };
+                    }
+                    // marking, selecting with space key.
+                    KeyCode::Char(' ') => {
+                        if let Some(selected) = self.table_state.selected() {
+                            if selected < self.filtered_patients.len() {
+                                // Check if already selected
+                                if let Some(patient) = &self.selected_patient {
+                                    if patient.id == self.filtered_patients[selected].id {
+                                        self.selected_patient = None; // Deselect
+                                    } else {
+                                        self.selected_patient =
+                                            Some(self.filtered_patients[selected].clone());
+                                        // Select Different
+                                    }
+                                } else {
+                                    self.selected_patient =
+                                        Some(self.filtered_patients[selected].clone());
+                                    // Select
+                                }
+                            }
+                        }
+                    }
+
+                    KeyCode::Enter => {
+                        if self.focus_index == BACK_BUTTON {
+                            return Ok(Some(SelectedApp::None));
+                        }
+                        if self.is_searching {
+                            if !self.filtered_patients.is_empty() {
+                                self.is_searching = false;
+                                self.table_state.select(Some(0));
+                            }
+                        } else {
+                            // Select Patient and switch to data entry state
+                            if let Some(selected) = self.table_state.selected() {
+                                if selected < self.filtered_patients.len() {
+                                    // Check the Selection
+                                    if let Some(patient) = &self.selected_patient {
+                                        if patient.id == self.filtered_patients[selected].id {
+                                            self.state = StoreRecordState::EnteringDetails; // Switch state
+                                            self.focus_index = 0; // Focus on first input field
+                                            return Ok(None);
+                                        } else {
+                                            self.set_error(
+                                                "Please Select Patient with Spacebar".to_string(),
+                                            );
+                                            return Ok(None);
+                                        }
+                                    } else {
+                                        self.set_error(
+                                            "Please Select Patient with Spacebar".to_string(),
+                                        );
+                                        return Ok(None);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    KeyCode::Esc => return Ok(Some(SelectedApp::None)), // Exit component
+                    _ => {}
+                }
+                return Ok(None); // No navigation needed yet
+            }
+
+            StoreRecordState::EnteringDetails => {
+                match key.code {
+                    KeyCode::Char(c) => match self.focus_index {
+                        0 => self.doctor_notes.push(c),
+                        1 => {
+                            if let Some(ref mut notes) = self.nurse_notes {
+                                notes.push(c);
+                            } else {
+                                self.nurse_notes = Some(c.to_string());
+                            }
+                        }
+                        2 => self.diagnosis.push(c),
+                        3 => {
+                            if let Some(ref mut prescription) = self.prescription {
+                                prescription.push(c);
+                            } else {
+                                self.prescription = Some(c.to_string());
+                            }
+                        }
+                        _ => {}
+                    },
+                    KeyCode::Backspace => match self.focus_index {
+                        0 => {
+                            self.doctor_notes.pop();
+                        }
+                        1 => {
+                            if let Some(notes) = self.nurse_notes.as_mut() {
+                                notes.pop();
+                            }
+                        }
+                        2 => {
+                            self.diagnosis.pop();
+                        }
+                        3 => {
+                            if let Some(prescription) = self.prescription.as_mut() {
+                                prescription.pop();
+                            }
+                        }
+                        _ => {}
+                    },
+                    KeyCode::Tab => {
+                        // Cycle through: inputs (0-3) -> Add Details (4) -> Back (5) -> inputs (0)
+                        self.focus_index = (self.focus_index + 1) % (INPUT_FIELDS + 2);
+                    }
+                    KeyCode::Down => {
+                        self.focus_index = (self.focus_index + 1) % (INPUT_FIELDS + 2);
+                    }
+                    KeyCode::Up => {
+                        self.focus_index =
+                            (self.focus_index + (INPUT_FIELDS + 1)) % (INPUT_FIELDS + 2);
+                    }
+                    KeyCode::Enter if self.focus_index == BACK_BUTTON => {
+                        // Back button.
+                        self.state = StoreRecordState::SelectingPatient; // Go back to patient selection
+                        self.focus_index = PATIENT_SELECTION; // Reset to patient selection.
+                        return Ok(None);
+                    }
+                    KeyCode::Enter if self.focus_index == SUBMIT_BUTTON => {
+                        // "Submit" on last input field
+                        if self.doctor_notes.is_empty() {
+                            self.set_error("Doctor's Notes cannot be empty".to_string());
                             return Ok(None);
                         }
-                    };
+                        if self.diagnosis.is_empty() {
+                            self.set_error("Diagnosis cannot be empty".to_string());
+                            return Ok(None);
+                        }
+                        //validation for patient selection
+                        if let Some(patient) = &self.selected_patient {
+                            let new_record = MedicalRecord {
+                                id: 0,
+                                patient_id: patient.id, // Use the selected patient's ID
+                                doctor_notes: self.doctor_notes.clone(),
+                                nurse_notes: self.nurse_notes.clone(),
+                                diagnosis: self.diagnosis.clone(),
+                                prescription: self.prescription.clone(),
+                            };
 
-                    if !self.all_patients.iter().any(|p| p.id == patient_id) {
-                        self.set_error("Patient with given ID does not exist.".to_string());
+                            match db::create_medical_record(&new_record) {
+                                Ok(_) => {
+                                    self.success_message =
+                                        Some("Medical record added successfully!".to_string());
+                                    self.success_timer = Some(Instant::now());
+
+                                    self.doctor_notes.clear();
+                                    self.nurse_notes = None;
+                                    self.diagnosis.clear();
+                                    self.prescription = None;
+                                    self.state = StoreRecordState::SelectingPatient;
+                                    self.focus_index = PATIENT_SELECTION; // Go back to selection,
+                                    self.selected_patient = None; // Clear the selection
+                                    self.clear_error(); //clear any previous error
+                                }
+                                Err(e) => {
+                                    self.set_error(format!("Database error: {}", e));
+                                }
+                            }
+                        } else {
+                            // This should not happen since you are now forcing user to
+                            // select a patient, but it's good to keep the error check.
+                            self.set_error("Please select a patient first.".to_string());
+                            return Ok(None);
+                        }
+                    }
+                    KeyCode::Enter => {}
+
+                    KeyCode::Esc => {
+                        // Go back to the patient selection
+                        self.state = StoreRecordState::SelectingPatient;
+                        self.focus_index = PATIENT_SELECTION; // Reset focus
                         return Ok(None);
                     }
-
-                    let new_record = MedicalRecord {
-                        id: 0, // Database will assign
-                        patient_id,
-                        doctor_notes: self.doctor_notes.clone(),
-                        nurse_notes: self.nurse_notes.clone(),
-                        diagnosis: self.diagnosis.clone(),
-                        prescription: self.prescription.clone(),
-                    };
-
-                    match db::create_medical_record(&new_record) {
-                        Ok(_) => {
-                            self.success_message =
-                                Some("Medical record added successfully!".to_string());
-                            self.success_timer = Some(Instant::now());
-
-                            // Clear form
-                            self.patient_id_input.clear();
-                            self.doctor_notes.clear();
-                            self.nurse_notes = None;
-                            self.diagnosis.clear();
-                            self.prescription = None;
-                            self.focus_index = 0;
-                            self.clear_error();
-                        }
-                        Err(e) => {
-                            self.set_error(format!("Database error: {}", e));
-                        }
-                    }
+                    _ => {}
                 }
             }
-            KeyCode::Esc => return Ok(Some(SelectedApp::None)),
-
-            _ => {}
         }
         Ok(None)
     }
 }
 
 impl Component for StoreRecord {
-    /// Handles input events.
-    ///
-    /// This function passes the input event to the component's `handle_input` method for processing.
-    ///
-    /// # Parameters
-    ///
-    /// *   `event`: A `KeyEvent` representing the user's key press.
-    ///
-    /// # Returns
-    ///
-    /// *   `Result<Option<SelectedApp>>`: Returns the result of the `handle_input` method.
+    /// Delegates input handling to the `handle_input` method.
     fn handle_input(&mut self, event: KeyEvent) -> Result<Option<SelectedApp>> {
         self.handle_input(event)
     }
 
-    /// Renders the `StoreRecord` component to the terminal.
-    ///
-    /// This function draws the user interface of the `StoreRecord` component using the `ratatui` library. It includes the form elements, input fields, labels, and any error or success messages.
-    ///
-    /// # Parameters
-    ///
-    /// *   `frame`: A mutable reference to a `Frame` object, used for rendering the UI elements.
+    /// Main render function that delegates to the appropriate state-specific render method
     fn render(&self, frame: &mut Frame) {
-        let area = frame.area();
+        // Set background color
         frame.render_widget(
             Block::default().style(Style::default().bg(Color::Rgb(16, 16, 28))),
-            area,
+            frame.area(),
         );
 
-        let main_layout = Layout::default()
+        // Render based on the current state - completely separate layouts
+        match self.state {
+            StoreRecordState::SelectingPatient => {
+                self.render_patient_selection_page(frame);
+            }
+            StoreRecordState::EnteringDetails => {
+                self.render_record_details_page(frame);
+            }
+        }
+    }
+}
+
+// Implementation of state-specific rendering methods
+impl StoreRecord {
+    /// Renders the complete patient selection page
+    fn render_patient_selection_page(&self, frame: &mut Frame) {
+        let area = frame.area();
+
+        // Define the layout for the entire patient selection page
+        // UPDATED: Reduced table height by adding spacing around the back button
+        let layout = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(3),
-                Constraint::Min(15),
-                Constraint::Length(0),
-                Constraint::Length(1),
-                Constraint::Length(1),
-                Constraint::Length(6),
+                Constraint::Length(3), // Header
+                Constraint::Min(7),    // Content area (search + table) - REDUCED by 3
+                Constraint::Length(1), // Status message area
+                Constraint::Length(1), // Back button
+                Constraint::Length(1), // Space 1
+                Constraint::Length(1), // Space 2
+                Constraint::Length(1), // Help text
             ])
             .margin(1)
-            .split(frame.area());
+            .split(area);
 
         // Header with title
         let header = Block::default()
             .borders(Borders::BOTTOM)
             .border_style(Style::default().fg(Color::Rgb(75, 75, 120)))
             .style(Style::default().bg(Color::Rgb(16, 16, 28)));
-        frame.render_widget(header, main_layout[0]);
+        frame.render_widget(header, layout[0]);
 
-        let title = Paragraph::new("📝 ADD MEDICAL RECORD")
+        let title = Paragraph::new("📝 SELECT PATIENT")
             .style(
                 Style::default()
                     .fg(Color::Rgb(230, 230, 250))
@@ -386,43 +474,315 @@ impl Component for StoreRecord {
                     .bg(Color::Rgb(16, 16, 28)),
             )
             .alignment(Alignment::Center);
-        frame.render_widget(title, main_layout[0]);
+        frame.render_widget(title, layout[0]);
 
-        let body_block = Block::default()
-            .borders(Borders::ALL)
-            .border_type(BorderType::Rounded)
-            .border_style(Style::default().fg(Color::Rgb(75, 75, 120)))
-            .style(Style::default().bg(Color::Rgb(22, 22, 35)));
+        // Content: Search + Table
+        self.render_patient_selection_content(frame, layout[1]);
 
-        frame.render_widget(body_block.clone(), main_layout[1]);
-        let body_inner = body_block.inner(main_layout[1]);
+        // Status message (error or success)
+        self.render_status_message(frame, layout[2]);
 
-        let body_layout = Layout::default()
+        // Back button
+        let back_text = if self.focus_index == BACK_BUTTON {
+            "► Back ◄"
+        } else {
+            "  Back  "
+        };
+        let back_style = if self.focus_index == BACK_BUTTON {
+            Style::default()
+                .fg(Color::Rgb(129, 199, 245)) // Blue
+                .add_modifier(Modifier::BOLD)
+        } else {
+            Style::default().fg(Color::Rgb(180, 180, 200)) // Light gray
+        };
+        frame.render_widget(
+            Paragraph::new(back_text)
+                .style(back_style)
+                .alignment(Alignment::Center),
+            layout[3],
+        );
+
+        // Empty spaces (4 and 5)
+
+        // Help text
+        frame.render_widget(
+            Paragraph::new(
+                "/ or s: Search, ↑/↓: Navigate | Spacebar: Select | Enter: Confirm | Tab: Back | Esc: Exit"
+            )
+            .style(Style::default().fg(Color::Rgb(180, 180, 200)))
+            .alignment(Alignment::Center),
+            layout[6],
+        );
+    }
+
+    /// Renders the search box and patient table
+    fn render_patient_selection_content(&self, frame: &mut Frame, area: Rect) {
+        // Layout for search box and table
+        let content_layout = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(3), // Patient ID
+                Constraint::Length(3), // Search Input
+                Constraint::Min(4),    // Patient Table
+            ])
+            .split(area);
+
+        // Search box
+        let search_block = Block::default()
+            .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
+            .title(Span::styled(
+                " Search Patients ",
+                Style::default()
+                    .fg(Color::Rgb(230, 230, 250))
+                    .add_modifier(Modifier::BOLD),
+            ))
+            .border_style(
+                if self.is_searching && self.focus_index == PATIENT_SELECTION {
+                    Style::default().fg(Color::Rgb(250, 250, 110))
+                } else {
+                    Style::default().fg(Color::Rgb(75, 75, 120))
+                },
+            )
+            .style(Style::default().bg(Color::Rgb(22, 22, 35)));
+
+        let search_paragraph = Paragraph::new(self.search_input.clone())
+            .style(Style::default().fg(Color::Rgb(220, 220, 240)))
+            .block(search_block);
+        frame.render_widget(search_paragraph, content_layout[0]);
+
+        // Patient selection table
+        let table_block = Block::default()
+            .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
+            .title(if !self.search_input.is_empty() {
+                format!(
+                    " Select Patient ({} of {} matches) ",
+                    self.filtered_patients.len(),
+                    self.all_patients.len()
+                )
+            } else {
+                format!(" Select Patient ({}) ", self.all_patients.len())
+            })
+            .title_style(
+                Style::default()
+                    .fg(Color::Rgb(230, 230, 250))
+                    .add_modifier(Modifier::BOLD),
+            )
+            .border_style(
+                if self.focus_index == PATIENT_SELECTION && !self.is_searching {
+                    Style::default().fg(Color::Rgb(250, 250, 110)) // Yellow when active
+                } else {
+                    Style::default().fg(Color::Rgb(140, 140, 200))
+                },
+            )
+            .style(Style::default().bg(Color::Rgb(26, 26, 36)));
+
+        let selected_style = Style::default()
+            .bg(Color::Rgb(45, 45, 60))
+            .fg(Color::Rgb(250, 250, 250))
+            .add_modifier(Modifier::BOLD);
+        let normal_style = Style::default()
+            .bg(Color::Rgb(26, 26, 36))
+            .fg(Color::Rgb(220, 220, 240));
+
+        // Create table rows
+        let mut rows = Vec::new();
+        for patient in &self.filtered_patients {
+            let selected_indicator = if let Some(selected) = &self.selected_patient {
+                if selected.id == patient.id {
+                    "✓"
+                } else {
+                    ""
+                }
+            } else {
+                ""
+            };
+
+            rows.push(Row::new(vec![
+                Cell::from(selected_indicator.to_string()).style(normal_style),
+                Cell::from(patient.id.to_string()).style(normal_style),
+                Cell::from(patient.first_name.clone()).style(normal_style),
+                Cell::from(patient.last_name.clone()).style(normal_style),
+                Cell::from(patient.phone_number.clone()).style(normal_style),
+            ]));
+        }
+
+        if self.filtered_patients.is_empty() {
+            let message = if self.search_input.is_empty() {
+                "No patients found in database"
+            } else {
+                "No patients match your search criteria"
+            };
+
+            rows.push(Row::new(vec![
+                Cell::from(""),
+                Cell::from(""),
+                Cell::from(message).style(Style::default().fg(Color::Rgb(180, 180, 200))),
+                Cell::from(""),
+                Cell::from(""),
+            ]));
+        }
+
+        let table = Table::new(
+            rows,
+            [
+                Constraint::Length(3),  // Selected indicator
+                Constraint::Length(8),  // ID
+                Constraint::Length(15), // First Name
+                Constraint::Length(15), // Last Name
+                Constraint::Min(15),    // Phone Number
+            ],
+        )
+        .header(
+            Row::new(vec![
+                Cell::from(""),
+                Cell::from("ID").style(Style::default().add_modifier(Modifier::BOLD)),
+                Cell::from("First Name").style(Style::default().add_modifier(Modifier::BOLD)),
+                Cell::from("Last Name").style(Style::default().add_modifier(Modifier::BOLD)),
+                Cell::from("Phone").style(Style::default().add_modifier(Modifier::BOLD)),
+            ])
+            .style(
+                Style::default()
+                    .bg(Color::Rgb(80, 60, 130))
+                    .fg(Color::Rgb(180, 180, 250)),
+            )
+            .height(1),
+        )
+        .block(table_block)
+        .row_highlight_style(selected_style)
+        .highlight_symbol("► ");
+
+        frame.render_stateful_widget(table, content_layout[1], &mut self.table_state.clone());
+    }
+
+    /// Renders the complete record details page
+    fn render_record_details_page(&self, frame: &mut Frame) {
+        let area = frame.area();
+
+        // Define the layout for the entire record details page
+        // UPDATED: Precise layout with exactly the spacing requested
+        let layout = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Length(3),  // Header
+                Constraint::Length(12), // Form fields (exactly 4 fields at 3 lines each)
+                Constraint::Length(1),  // Space after forms
+                Constraint::Length(1),  // Status message area
+                Constraint::Length(1),  // Add Details button
+                Constraint::Length(1),  // Space
+                Constraint::Length(1),  // Back button
+                Constraint::Length(1),  // Space 1
+                Constraint::Length(1),  // Space 2
+                Constraint::Length(1),  // Help text
+            ])
+            .margin(1)
+            .split(area);
+
+        // Header with title
+        let header = Block::default()
+            .borders(Borders::BOTTOM)
+            .border_style(Style::default().fg(Color::Rgb(75, 75, 120)))
+            .style(Style::default().bg(Color::Rgb(16, 16, 28)));
+        frame.render_widget(header, layout[0]);
+
+        let title = Paragraph::new("📝 ADD RECORD DETAILS")
+            .style(
+                Style::default()
+                    .fg(Color::Rgb(230, 230, 250))
+                    .add_modifier(Modifier::BOLD)
+                    .bg(Color::Rgb(16, 16, 28)),
+            )
+            .alignment(Alignment::Center);
+        frame.render_widget(title, layout[0]);
+
+        // Form fields
+        self.render_record_form_fields(frame, layout[1]);
+
+        // Space after forms (layout[2])
+
+        // Status message (error or success)
+        self.render_status_message(frame, layout[3]);
+
+        // Add Details button
+        let submit_text = if self.focus_index == SUBMIT_BUTTON {
+            "► Add Details ◄"
+        } else {
+            "  Add Details  "
+        };
+        let submit_style = if self.focus_index == SUBMIT_BUTTON {
+            Style::default()
+                .fg(Color::Rgb(140, 219, 140)) // Green
+                .add_modifier(Modifier::BOLD)
+        } else {
+            Style::default().fg(Color::Rgb(180, 180, 200)) // Light gray
+        };
+        frame.render_widget(
+            Paragraph::new(submit_text)
+                .style(submit_style)
+                .alignment(Alignment::Center),
+            layout[4],
+        );
+
+        // Space after Add Details (layout[5])
+
+        // Back button
+        let back_text = if self.focus_index == BACK_BUTTON {
+            "► Back ◄"
+        } else {
+            "  Back  "
+        };
+        let back_style = if self.focus_index == BACK_BUTTON {
+            Style::default()
+                .fg(Color::Rgb(129, 199, 245)) // Blue
+                .add_modifier(Modifier::BOLD)
+        } else {
+            Style::default().fg(Color::Rgb(180, 180, 200)) // Light gray
+        };
+        frame.render_widget(
+            Paragraph::new(back_text)
+                .style(back_style)
+                .alignment(Alignment::Center),
+            layout[6],
+        );
+
+        // Spaces after Back (layout[7] and layout[8])
+
+        // Help text
+        frame.render_widget(
+            Paragraph::new("Tab: Switch Focus, ↑/↓: Navigate | Enter: Submit | Esc: Back")
+                .style(Style::default().fg(Color::Rgb(180, 180, 200)))
+                .alignment(Alignment::Center),
+            layout[9],
+        );
+    }
+
+    /// Renders the form fields for the record details
+    fn render_record_form_fields(&self, frame: &mut Frame, area: Rect) {
+        let form_layout = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
                 Constraint::Length(3), // Doctor's Notes
                 Constraint::Length(3), // Nurse's Notes
                 Constraint::Length(3), // Diagnosis
                 Constraint::Length(3), // Prescription
             ])
-            .margin(1)
-            .split(body_inner);
+            .horizontal_margin(3) // Make forms wider by reducing horizontal margins
+            .split(area);
 
         let required_style = Style::default().fg(Color::Rgb(230, 230, 250));
 
-        // Patient ID
-        let patient_id_input = Paragraph::new(self.patient_id_input.clone())
-            .style(
-                Style::default()
-                    .fg(Color::Rgb(220, 220, 240))
-                    .bg(Color::Rgb(26, 26, 36)),
-            )
+        // Doctor's Notes
+        let doctor_notes_input = Paragraph::new(self.doctor_notes.clone())
+            .style(if self.focus_index == 0 {
+                Style::default().fg(Color::Yellow)
+            } else {
+                Style::default().fg(Color::Rgb(220, 220, 240))
+            })
             .block(
                 Block::default()
                     .borders(Borders::ALL)
                     .border_type(BorderType::Rounded)
-                    .title(Span::styled(" Patient ID* ", required_style))
+                    .title(Span::styled(" Doctor's Notes* ", required_style))
                     .border_style(if self.focus_index == 0 {
                         Style::default().fg(Color::Rgb(250, 250, 110))
                     } else {
@@ -430,20 +790,20 @@ impl Component for StoreRecord {
                     })
                     .style(Style::default().bg(Color::Rgb(26, 26, 36))),
             );
-        frame.render_widget(patient_id_input, body_layout[0]);
+        frame.render_widget(doctor_notes_input, form_layout[0]);
 
-        // Doctor's Notes
-        let doctor_notes_input = Paragraph::new(self.doctor_notes.clone())
-            .style(
-                Style::default()
-                    .fg(Color::Rgb(220, 220, 240))
-                    .bg(Color::Rgb(26, 26, 36)),
-            )
+        // Nurse's Notes (Optional)
+        let nurse_notes_input = Paragraph::new(self.nurse_notes.clone().unwrap_or_default())
+            .style(if self.focus_index == 1 {
+                Style::default().fg(Color::Yellow)
+            } else {
+                Style::default().fg(Color::Rgb(220, 220, 240))
+            })
             .block(
                 Block::default()
                     .borders(Borders::ALL)
                     .border_type(BorderType::Rounded)
-                    .title(Span::styled(" Doctor's Notes* ", required_style))
+                    .title(Span::styled(" Nurse's Notes ", required_style))
                     .border_style(if self.focus_index == 1 {
                         Style::default().fg(Color::Rgb(250, 250, 110))
                     } else {
@@ -451,20 +811,20 @@ impl Component for StoreRecord {
                     })
                     .style(Style::default().bg(Color::Rgb(26, 26, 36))),
             );
-        frame.render_widget(doctor_notes_input, body_layout[1]);
+        frame.render_widget(nurse_notes_input, form_layout[1]);
 
-        // Nurse's Notes (Optional)
-        let nurse_notes_input = Paragraph::new(self.nurse_notes.clone().unwrap_or_default())
-            .style(
-                Style::default()
-                    .fg(Color::Rgb(220, 220, 240))
-                    .bg(Color::Rgb(26, 26, 36)),
-            )
+        // Diagnosis
+        let diagnosis_input = Paragraph::new(self.diagnosis.clone())
+            .style(if self.focus_index == 2 {
+                Style::default().fg(Color::Yellow)
+            } else {
+                Style::default().fg(Color::Rgb(220, 220, 240))
+            })
             .block(
                 Block::default()
                     .borders(Borders::ALL)
                     .border_type(BorderType::Rounded)
-                    .title(Span::styled(" Nurse's Notes ", required_style))
+                    .title(Span::styled(" Diagnosis* ", required_style))
                     .border_style(if self.focus_index == 2 {
                         Style::default().fg(Color::Rgb(250, 250, 110))
                     } else {
@@ -472,20 +832,20 @@ impl Component for StoreRecord {
                     })
                     .style(Style::default().bg(Color::Rgb(26, 26, 36))),
             );
-        frame.render_widget(nurse_notes_input, body_layout[2]);
+        frame.render_widget(diagnosis_input, form_layout[2]);
 
-        // Diagnosis
-        let diagnosis_input = Paragraph::new(self.diagnosis.clone())
-            .style(
-                Style::default()
-                    .fg(Color::Rgb(220, 220, 240))
-                    .bg(Color::Rgb(26, 26, 36)),
-            )
+        // Prescription (Optional)
+        let prescription_input = Paragraph::new(self.prescription.clone().unwrap_or_default())
+            .style(if self.focus_index == 3 {
+                Style::default().fg(Color::Yellow)
+            } else {
+                Style::default().fg(Color::Rgb(220, 220, 240))
+            })
             .block(
                 Block::default()
                     .borders(Borders::ALL)
                     .border_type(BorderType::Rounded)
-                    .title(Span::styled(" Diagnosis* ", required_style))
+                    .title(Span::styled(" Prescription ", required_style))
                     .border_style(if self.focus_index == 3 {
                         Style::default().fg(Color::Rgb(250, 250, 110))
                     } else {
@@ -493,30 +853,11 @@ impl Component for StoreRecord {
                     })
                     .style(Style::default().bg(Color::Rgb(26, 26, 36))),
             );
-        frame.render_widget(diagnosis_input, body_layout[3]);
+        frame.render_widget(prescription_input, form_layout[3]);
+    }
 
-        // Prescription (Optional)
-        let prescription_input = Paragraph::new(self.prescription.clone().unwrap_or_default())
-            .style(
-                Style::default()
-                    .fg(Color::Rgb(220, 220, 240))
-                    .bg(Color::Rgb(26, 26, 36)),
-            )
-            .block(
-                Block::default()
-                    .borders(Borders::ALL)
-                    .border_type(BorderType::Rounded)
-                    .title(Span::styled(" Prescription ", required_style))
-                    .border_style(if self.focus_index == 4 {
-                        Style::default().fg(Color::Rgb(250, 250, 110))
-                    } else {
-                        Style::default().fg(Color::Rgb(140, 140, 200))
-                    })
-                    .style(Style::default().bg(Color::Rgb(26, 26, 36))),
-            );
-        frame.render_widget(prescription_input, body_layout[4]);
-
-        // Error or success message area
+    /// Renders the status message (error or success)
+    fn render_status_message(&self, frame: &mut Frame, area: Rect) {
         let status_message = if let Some(success) = &self.success_message {
             Paragraph::new(format!("✓ {}", success))
                 .style(
@@ -538,66 +879,6 @@ impl Component for StoreRecord {
         } else {
             Paragraph::new("").style(Style::default().bg(Color::Rgb(16, 16, 28)))
         };
-        frame.render_widget(status_message, main_layout[3]);
-
-        let footer_layout = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([
-                Constraint::Length(2), // Submit button
-                Constraint::Length(2), // Back button
-                Constraint::Min(2),    // Help text
-            ])
-            .split(main_layout[5]);
-
-        // Submit button - simple text version
-        let submit_text = if self.focus_index == INPUT_FIELDS {
-            "► Submit ◄"
-        } else {
-            "  Submit  "
-        };
-
-        let submit_style = if self.focus_index == INPUT_FIELDS {
-            Style::default()
-                .fg(Color::Rgb(140, 219, 140))
-                .add_modifier(Modifier::BOLD)
-        } else {
-            Style::default().fg(Color::Rgb(180, 180, 200))
-        };
-
-        let submit_button = Paragraph::new(submit_text)
-            .style(submit_style)
-            .alignment(Alignment::Center);
-        frame.render_widget(submit_button, footer_layout[0]);
-
-        // Back button - simple text version
-        let back_text = if self.focus_index == INPUT_FIELDS + 1 {
-            "► Back ◄"
-        } else {
-            "  Back  "
-        };
-
-        let back_style = if self.focus_index == INPUT_FIELDS + 1 {
-            Style::default()
-                .fg(Color::Rgb(129, 199, 245))
-                .add_modifier(Modifier::BOLD)
-        } else {
-            Style::default().fg(Color::Rgb(180, 180, 200))
-        };
-
-        let back_button = Paragraph::new(back_text)
-            .style(back_style)
-            .alignment(Alignment::Center);
-        frame.render_widget(back_button, footer_layout[1]);
-
-        // Help text
-        let help_text = "Tab: Switch Focus | Arrow Keys: Switch Fields | Enter: Submit | Esc: Back";
-        let help_paragraph = Paragraph::new(help_text)
-            .style(
-                Style::default()
-                    .fg(Color::Rgb(140, 140, 170))
-                    .bg(Color::Rgb(16, 16, 28)),
-            )
-            .alignment(Alignment::Center);
-        frame.render_widget(help_paragraph, footer_layout[2]);
+        frame.render_widget(status_message, area);
     }
 }
