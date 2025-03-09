@@ -21,6 +21,18 @@ const SEARCH_FIELD: usize = 0;
 const STAFF_LIST: usize = 1;
 const BACK_BUTTON: usize = 2;
 
+/// Represents the different states of the staff list view.
+///
+/// This enum distinguishes between viewing the list of staff members
+/// and viewing detailed information about a specific staff member.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StaffViewState {
+    /// Viewing the list of staff members
+    ViewingList,
+    /// Viewing detailed information about a specific staff member
+    ViewingDetails,
+}
+
 /// Component for displaying and interacting with a list of hospital staff members.
 ///
 /// This component manages staff data retrieval, search functionality, keyboard navigation,
@@ -38,8 +50,8 @@ pub struct ListStaff {
     state: TableState,
     /// Optional error message to display at the bottom of the screen
     error_message: Option<String>,
-    /// Whether to display detailed information for the selected staff member
-    show_details: bool,
+    /// Current view state (list view or details view)
+    view_state: StaffViewState,
     /// Current UI element that has focus (search field, staff list, or back button)
     focus_index: usize,
 }
@@ -56,7 +68,7 @@ impl ListStaff {
             is_searching: false,
             state: TableState::default(),
             error_message: None,
-            show_details: false,
+            view_state: StaffViewState::ViewingList,
             focus_index: STAFF_LIST,
         }
     }
@@ -171,13 +183,21 @@ impl ListStaff {
         self.state.select(Some(i));
     }
 
-    /// Toggles detailed view for the currently selected staff member.
+    /// Switches to the detailed view for the currently selected staff member.
     ///
+    /// Changes the view state to ViewingDetails if a staff member is selected.
     /// Does nothing if no staff member is selected or the list is empty.
-    fn toggle_details(&mut self) {
+    fn view_staff_details(&mut self) {
         if !self.filtered_staff.is_empty() && self.state.selected().is_some() {
-            self.show_details = !self.show_details;
+            self.view_state = StaffViewState::ViewingDetails;
         }
+    }
+
+    /// Returns to the list view from the details view.
+    ///
+    /// Changes the view state back to ViewingList.
+    fn return_to_list(&mut self) {
+        self.view_state = StaffViewState::ViewingList;
     }
 
     /// Moves focus to the next UI element in the tab order.
@@ -240,7 +260,21 @@ impl ListStaff {
             return Ok(None);
         }
 
-        // Handle input in normal mode
+        // Check if we're in details view
+        if matches!(self.view_state, StaffViewState::ViewingDetails) {
+            match key.code {
+                KeyCode::Esc | KeyCode::Enter | KeyCode::Backspace => {
+                    self.return_to_list();
+                }
+                KeyCode::Char('b') | KeyCode::Char('B') => {
+                    self.return_to_list();
+                }
+                _ => {}
+            }
+            return Ok(None);
+        }
+
+        // Handle input in normal list view mode
         match key.code {
             // Activate search mode with '/' or 's'
             KeyCode::Char(c) if c == '/' || c == 's' || c == 'S' => {
@@ -281,7 +315,7 @@ impl ListStaff {
                 if self.focus_index == BACK_BUTTON {
                     return Ok(Some(StaffAction::BackToHome));
                 } else if self.focus_index == STAFF_LIST {
-                    self.toggle_details();
+                    self.view_staff_details();
                 } else if self.focus_index == SEARCH_FIELD {
                     self.activate_search();
                 }
@@ -295,11 +329,7 @@ impl ListStaff {
             }
             // Escape handling
             KeyCode::Esc => {
-                if self.show_details {
-                    self.show_details = false;
-                } else {
-                    return Ok(Some(StaffAction::BackToHome));
-                }
+                return Ok(Some(StaffAction::BackToHome));
             }
             _ => {}
         }
@@ -336,6 +366,22 @@ impl Component for ListStaff {
             area,
         );
 
+        // Render based on the current view state
+        match self.view_state {
+            StaffViewState::ViewingList => self.render_list_view(frame),
+            StaffViewState::ViewingDetails => self.render_details_view(frame),
+        }
+    }
+}
+
+impl ListStaff {
+    /// Renders the main list view showing all staff members.
+    ///
+    /// This method displays the header, search field, staff table,
+    /// help text, back button, and error messages in the list view.
+    fn render_list_view(&self, frame: &mut Frame) {
+        let area = frame.area();
+
         // Create the main layout
         let layout = Layout::default()
             .direction(Direction::Vertical)
@@ -343,8 +389,8 @@ impl Component for ListStaff {
                 Constraint::Length(3), // Header
                 Constraint::Length(3), // Search input
                 Constraint::Min(10),   // Table
-                Constraint::Length(3), // Staff details or help text
-                Constraint::Length(2), // Back button
+                Constraint::Length(1), // Help text
+                Constraint::Length(1), // Back button
                 Constraint::Length(1), // Error Message
             ])
             .margin(1)
@@ -491,48 +537,17 @@ impl Component for ListStaff {
             frame.render_stateful_widget(table, layout[2], &mut self.state.clone());
         }
 
-        // Show either staff details or help text
-        if self.show_details && self.state.selected().is_some() {
-            if let Some(staff_member) = self.selected_staff() {
-                let details = format!(
-                    "Details for {}: Role: {}, Phone: {}, Address: {}",
-                    staff_member.name,
-                    match staff_member.role {
-                        crate::models::StaffRole::Doctor => "Doctor",
-                        crate::models::StaffRole::Nurse => "Nurse",
-                        crate::models::StaffRole::Admin => "Admin",
-                        crate::models::StaffRole::Technician => "Technician",
-                    },
-                    staff_member.phone_number,
-                    staff_member.address
-                );
-
-                let details_widget = Paragraph::new(details)
-                    .style(Style::default().fg(Color::Rgb(200, 200, 220)))
-                    .block(
-                        Block::default()
-                            .title(" Staff Details ")
-                            .borders(Borders::ALL)
-                            .border_type(BorderType::Rounded)
-                            .border_style(Style::default().fg(Color::Rgb(75, 75, 120))),
-                    )
-                    .wrap(Wrap { trim: true });
-
-                frame.render_widget(details_widget, layout[3]);
-            }
+        // Display contextual help text
+        let help_text = if self.is_searching {
+            "Type to search | ↓/Enter: To results | Esc: Cancel search"
         } else {
-            // Display contextual help based on mode
-            let help_text = if self.is_searching {
-                "Type to search | ↓/Enter: To results | Esc: Cancel search"
-            } else {
-                "/ or s: Search | ↑↓: Navigate | Enter: View Details | R: Refresh | Tab: Focus"
-            };
+            "/ or s: Search | ↑↓: Navigate | Enter: View Details | R: Refresh | Tab: Focus"
+        };
 
-            let help_paragraph = Paragraph::new(help_text)
-                .style(Style::default().fg(Color::Rgb(140, 140, 170)))
-                .alignment(Alignment::Center);
-            frame.render_widget(help_paragraph, layout[3]);
-        }
+        let help_paragraph = Paragraph::new(help_text)
+            .style(Style::default().fg(Color::Rgb(140, 140, 170)))
+            .alignment(Alignment::Center);
+        frame.render_widget(help_paragraph, layout[3]);
 
         // Render the back button
         let back_text = if self.focus_index == BACK_BUTTON {
@@ -561,6 +576,151 @@ impl Component for ListStaff {
                 .alignment(Alignment::Center);
             frame.render_widget(error_paragraph, layout[5]);
         }
+    }
+
+    /// Renders the details view for a selected staff member.
+    ///
+    /// This method displays comprehensive information about the selected
+    /// staff member in a dedicated screen with well-organized sections.
+    fn render_details_view(&self, frame: &mut Frame) {
+        let area = frame.area();
+
+        // Create the main layout for the details view
+        let layout = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Length(3), // Header
+                Constraint::Min(16),   // Content area
+                Constraint::Length(1), // Back button
+                Constraint::Length(1), // Help text
+            ])
+            .margin(1)
+            .split(area);
+
+        // Render header
+        let header_block = Block::default()
+            .borders(Borders::BOTTOM)
+            .border_style(Style::default().fg(Color::Rgb(75, 75, 120)))
+            .style(Style::default().bg(Color::Rgb(16, 16, 28)));
+        frame.render_widget(header_block, layout[0]);
+
+        let title = Paragraph::new("👤 STAFF DETAILS")
+            .style(
+                Style::default()
+                    .fg(Color::Rgb(230, 230, 250))
+                    .add_modifier(Modifier::BOLD)
+                    .bg(Color::Rgb(16, 16, 28)),
+            )
+            .alignment(Alignment::Center);
+        frame.render_widget(title, layout[0]);
+
+        // Render staff details
+        if let Some(staff_member) = self.selected_staff() {
+            let content_layout = Layout::default()
+                .direction(Direction::Vertical)
+                .constraints([
+                    Constraint::Length(3), // ID and Name
+                    Constraint::Length(3), // Role
+                    Constraint::Length(3), // Phone
+                    Constraint::Length(3), // Address
+                    Constraint::Min(4),    // Future expansion (specialization, etc.)
+                ])
+                .margin(1)
+                .split(layout[1]);
+
+            // Title style - lighter cyan color
+            let title_style = Style::default().fg(Color::Cyan);
+
+            // ID and Name block
+            let id_name_block = Block::default()
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded)
+                .title(Span::styled(" Basic Information ", title_style))
+                .border_style(Style::default().fg(Color::White))
+                .style(Style::default().bg(Color::Rgb(22, 22, 35)));
+
+            let id_name_text = format!("  ID: {}, Name: {}", staff_member.id, staff_member.name);
+
+            let id_name_widget = Paragraph::new(id_name_text)
+                .style(Style::default().fg(Color::Rgb(220, 220, 240)))
+                .block(id_name_block);
+
+            frame.render_widget(id_name_widget, content_layout[0]);
+
+            // Role block
+            let role_block = Block::default()
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded)
+                .title(Span::styled(" Role ", title_style))
+                .border_style(Style::default().fg(Color::White))
+                .style(Style::default().bg(Color::Rgb(22, 22, 35)));
+
+            let role_text = format!(
+                "  {}",
+                match staff_member.role {
+                    crate::models::StaffRole::Doctor => "Doctor",
+                    crate::models::StaffRole::Nurse => "Nurse",
+                    crate::models::StaffRole::Admin => "Administrator",
+                    crate::models::StaffRole::Technician => "Technician",
+                }
+            );
+
+            let role_widget = Paragraph::new(role_text)
+                .style(Style::default().fg(Color::Rgb(220, 220, 240)))
+                .block(role_block);
+
+            frame.render_widget(role_widget, content_layout[1]);
+
+            // Phone block
+            let phone_block = Block::default()
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded)
+                .title(Span::styled(" Phone Number ", title_style))
+                .border_style(Style::default().fg(Color::White))
+                .style(Style::default().bg(Color::Rgb(22, 22, 35)));
+
+            let phone_text = format!("  {}", staff_member.phone_number);
+
+            let phone_widget = Paragraph::new(phone_text)
+                .style(Style::default().fg(Color::Rgb(220, 220, 240)))
+                .block(phone_block);
+
+            frame.render_widget(phone_widget, content_layout[2]);
+
+            // Address block
+            let address_block = Block::default()
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded)
+                .title(Span::styled(" Address ", title_style))
+                .border_style(Style::default().fg(Color::White))
+                .style(Style::default().bg(Color::Rgb(22, 22, 35)));
+
+            let address_text = format!("    {}", staff_member.address);
+
+            let address_widget = Paragraph::new(address_text)
+                .style(Style::default().fg(Color::Rgb(220, 220, 240)))
+                .block(address_block)
+                .wrap(Wrap { trim: true });
+
+            frame.render_widget(address_widget, content_layout[3]);
+        }
+
+        // Back button - always selected in details view
+        let back_button = Paragraph::new("► Back ◄")
+            .style(
+                Style::default()
+                    .fg(Color::Rgb(129, 199, 245))
+                    .add_modifier(Modifier::BOLD),
+            )
+            .alignment(Alignment::Center);
+        frame.render_widget(back_button, layout[2]);
+
+        // Help text
+        let help_text = "Enter/Esc/Backspace: Return to list";
+        let help_paragraph = Paragraph::new(help_text)
+            .style(Style::default().fg(Color::Rgb(140, 140, 170)))
+            .alignment(Alignment::Center);
+        frame.render_widget(help_paragraph, layout[3]);
     }
 }
 
