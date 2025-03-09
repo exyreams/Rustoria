@@ -1,11 +1,13 @@
 //! `DeleteRecord` module for the Hospital application.
 //!
-//! This module provides the `DeleteRecord` component, which allows users to view, filter, select, and delete medical records from the database.  It integrates with the database for record retrieval and deletion, and presents a TUI (Text User Interface) for user interaction, including search functionality and confirmation dialogs. The primary type exposed is `DeleteRecord`.
+//! This module provides the `DeleteRecord` component, which allows users to view, filter, select, and delete medical records from the database.
+//! It integrates with the database for record retrieval and deletion, and presents a TUI (Text User Interface) for user interaction,
+//! including search functionality and confirmation dialogs. The primary type exposed is `DeleteRecord`.
 
 use crate::app::SelectedApp;
 use crate::components::Component;
 use crate::db;
-use crate::models::MedicalRecord;
+use crate::models::{MedicalRecord, Patient};
 use crate::tui::Frame;
 use anyhow::Result;
 use crossterm::event::{KeyCode, KeyEvent};
@@ -13,6 +15,7 @@ use ratatui::{
     prelude::*,
     widgets::{Block, BorderType, Borders, Cell, Clear, Paragraph, Row, Table, TableState},
 };
+use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
 /// A component for managing the deletion of medical records in the hospital application.
@@ -26,16 +29,17 @@ use std::time::{Duration, Instant};
 pub struct DeleteRecord {
     records: Vec<MedicalRecord>,          // All records
     filtered_records: Vec<MedicalRecord>, // Filtered records
+    patients: HashMap<i64, Patient>,      // Map of patient ID to patient info
     selected_record_ids: Vec<i64>,        // IDs of selected records
     search_input: String,                 // Search input
     is_searching: bool,                   // Search mode flag
     table_state: TableState,              // Table state
     show_confirmation: bool,              // Confirmation dialog flag
     confirmation_selected: usize,         // Confirmation dialog selection
-    error_message: Option<String>,
-    error_timer: Option<Instant>,
-    success_message: Option<String>,
-    success_timer: Option<Instant>,
+    error_message: Option<String>,        // Error message
+    error_timer: Option<Instant>,         // Error timer
+    success_message: Option<String>,      // Success message
+    success_timer: Option<Instant>,       // Success timer
 }
 
 impl DeleteRecord {
@@ -52,6 +56,7 @@ impl DeleteRecord {
         Self {
             records: Vec::new(),
             filtered_records: Vec::new(),
+            patients: HashMap::new(),
             selected_record_ids: Vec::new(),
             search_input: String::new(),
             is_searching: false,
@@ -77,6 +82,7 @@ impl DeleteRecord {
     /// from the database.
     pub fn fetch_records(&mut self) -> Result<()> {
         self.records = db::get_all_medical_records()?;
+        self.fetch_patients_data()?;
         self.filter_records();
 
         if !self.filtered_records.is_empty() {
@@ -104,9 +110,19 @@ impl DeleteRecord {
                 .records
                 .iter()
                 .filter(|r| {
+                    // Check if patient name matches search term
+                    let patient_name_match = if let Some(patient) = self.patients.get(&r.patient_id)
+                    {
+                        patient.first_name.to_lowercase().contains(&search_term)
+                            || patient.last_name.to_lowercase().contains(&search_term)
+                    } else {
+                        false
+                    };
+
                     r.patient_id.to_string().contains(&search_term)
                         || r.doctor_notes.to_lowercase().contains(&search_term)
                         || r.diagnosis.to_lowercase().contains(&search_term)
+                        || patient_name_match
                 })
                 .cloned()
                 .collect();
@@ -114,13 +130,60 @@ impl DeleteRecord {
 
         // Update selection state
         self.selected_record_ids.clear();
-        if let Some(selected) = self.table_state.selected() {
-            if selected >= self.filtered_records.len() && !self.filtered_records.is_empty() {
-                self.table_state.select(Some(0));
-            } else if self.filtered_records.is_empty() {
-                self.table_state.select(None)
+
+        let num_filtered = self.filtered_records.len();
+        if num_filtered == 0 {
+            self.table_state.select(None); // No records, clear selection
+        } else {
+            // If there are records, make sure the selected index is valid
+            let selected = self.table_state.selected().unwrap_or(0); // Default to 0 if nothing is selected
+            self.table_state
+                .select(Some(selected.min(num_filtered - 1)));
+        }
+    }
+
+    /// Fetches patient data for all patient IDs in the records.
+    ///
+    /// This method retrieves patient information for all patient IDs in the records and
+    /// stores it in the patients HashMap for quick lookup.
+    ///
+    /// # Errors
+    ///
+    /// Returns an `anyhow::Result` which will contain an error if the database query fails.
+    fn fetch_patients_data(&mut self) -> Result<()> {
+        // Clear existing patients
+        self.patients.clear();
+
+        // Get all patients from database
+        match db::get_all_patients() {
+            Ok(all_patients) => {
+                // Create map of patient ID to patient data
+                for patient in all_patients {
+                    self.patients.insert(patient.id, patient);
+                }
+                Ok(())
+            }
+            Err(e) => {
+                self.set_error(format!("Failed to fetch patient data: {}", e));
+                Ok(()) // Continue program but with error message
             }
         }
+    }
+
+    /// Returns the patient information for a given patient ID.
+    ///
+    /// This function retrieves the patient information for the specified patient ID from the `patients` HashMap.
+    ///
+    /// # Parameters
+    ///
+    /// - `patient_id`: The ID of the patient to retrieve information for.
+    ///
+    /// # Returns
+    ///
+    /// - `Some(&Patient)` if the patient information exists.
+    /// - `None` if the patient information does not exist.
+    fn get_patient(&self, patient_id: i64) -> Option<&Patient> {
+        self.patients.get(&patient_id)
     }
 
     /// Handles key input events to manage the component's behavior.
@@ -149,59 +212,50 @@ impl DeleteRecord {
                 }
                 KeyCode::Enter => {
                     if self.confirmation_selected == 0 {
-                        // Yes
-                        let mut deleted_count = 0;
-                        let mut error_occurred = false;
-
-                        for record_id in &self.selected_record_ids {
-                            match db::delete_medical_record(*record_id) {
-                                Ok(_) => deleted_count += 1,
-                                Err(_) => {
-                                    error_occurred = true;
-                                    break;
-                                }
-                            }
-                        }
-                        self.selected_record_ids.clear();
-
-                        if error_occurred {
-                            self.set_error(format!(
-                                "Error during deletion. {} records deleted successfully.",
-                                deleted_count
-                            ));
-                        } else if deleted_count > 0 {
-                            self.success_message = Some(format!(
-                                "{} record{} deleted successfully!",
-                                deleted_count,
-                                if deleted_count == 1 { "" } else { "s" }
-                            ));
-                            self.success_timer = Some(Instant::now());
-                        } else {
+                        // Yes, proceed with deletion
+                        if self.selected_record_ids.is_empty() {
+                            // This should never happen, but handle it gracefully
                             self.set_error("No records were selected for deletion.".to_string());
-                        }
+                        } else {
+                            let mut deleted_count = 0;
+                            let mut error_occurred = false;
 
-                        if let Ok(records) = db::get_all_medical_records() {
-                            self.records = records;
-                            self.filter_records();
-
-                            if self.filtered_records.is_empty() {
-                                self.table_state.select(None);
-                            } else if let Some(selected) = self.table_state.selected() {
-                                if selected >= self.filtered_records.len() {
-                                    self.table_state.select(Some(
-                                        self.filtered_records.len().saturating_sub(1),
-                                    ));
+                            for record_id in &self.selected_record_ids {
+                                match db::delete_medical_record(*record_id) {
+                                    Ok(_) => deleted_count += 1,
+                                    Err(_) => {
+                                        error_occurred = true;
+                                        break; // Stop on first error
+                                    }
                                 }
                             }
-                        }
+                            self.selected_record_ids.clear();
 
+                            if error_occurred {
+                                self.set_error(format!(
+                                    "Error during deletion. {} records deleted successfully.",
+                                    deleted_count
+                                ));
+                            } else if deleted_count > 0 {
+                                self.success_message = Some(format!(
+                                    "{} record{} deleted successfully!",
+                                    deleted_count,
+                                    if deleted_count == 1 { "" } else { "s" }
+                                ));
+                                self.success_timer = Some(Instant::now());
+                            }
+
+                            // Refresh records after deletion
+                            self.fetch_records()?;
+                        }
                         self.show_confirmation = false;
                     } else {
-                        // No
+                        // No, cancel deletion
                         self.show_confirmation = false;
                     }
                 }
                 KeyCode::Esc => {
+                    // Cancel confirmation
                     self.show_confirmation = false;
                 }
                 _ => {}
@@ -264,6 +318,7 @@ impl DeleteRecord {
                     }
                 }
                 KeyCode::Char(' ') => {
+                    // Toggle selection
                     if let Some(selected) = self.table_state.selected() {
                         if selected < self.filtered_records.len() {
                             let record_id = self.filtered_records[selected].id;
@@ -279,25 +334,30 @@ impl DeleteRecord {
                         }
                     }
                 }
-                KeyCode::Char('b') => {
+                KeyCode::Enter => {
+                    // Show confirmation if records are selected.  Error if not.
                     if !self.selected_record_ids.is_empty() {
                         self.show_confirmation = true;
-                        self.confirmation_selected = 1;
+                        self.confirmation_selected = 1; // Default to "No"
                     } else {
-                        self.set_error("No records selected for deletion.".to_string());
+                        self.set_error(
+                            "Please select record(s) to delete using the spacebar.".to_string(),
+                        );
                     }
                 }
-                KeyCode::Enter => {
-                    if let Some(selected) = self.table_state.selected() {
-                        if selected < self.filtered_records.len() {
-                            let record_id = self.filtered_records[selected].id;
-                            self.selected_record_ids.push(record_id);
-                            self.show_confirmation = true;
-                            self.confirmation_selected = 1;
-                        }
+                KeyCode::Char('b') => {
+                    // Bulk delete (requires selection, show error if none)
+                    if !self.selected_record_ids.is_empty() {
+                        self.show_confirmation = true;
+                        self.confirmation_selected = 1; // Default to "No"
+                    } else {
+                        self.set_error(
+                            "Please select record(s) to delete using the spacebar.".to_string(),
+                        );
                     }
                 }
                 KeyCode::Char('a') => {
+                    // Select/deselect all
                     if self.selected_record_ids.len() == self.filtered_records.len() {
                         self.selected_record_ids.clear();
                     } else {
@@ -306,10 +366,8 @@ impl DeleteRecord {
                     }
                 }
                 KeyCode::Char('r') | KeyCode::Char('R') => {
-                    if let Ok(records) = db::get_all_medical_records() {
-                        self.records = records;
-                        self.filter_records();
-                    }
+                    // Refresh records
+                    self.fetch_records()?;
                 }
                 KeyCode::Esc => {
                     return Ok(Some(SelectedApp::None));
@@ -515,10 +573,17 @@ impl Component for DeleteRecord {
                 "[ ]"
             };
 
+            // Get patient name from patients HashMap
+            let (first_name, last_name) = match self.get_patient(record.patient_id) {
+                Some(patient) => (patient.first_name.clone(), patient.last_name.clone()),
+                None => ("Unknown".to_string(), "Patient".to_string()),
+            };
+
             rows.push(Row::new(vec![
                 Cell::from(checkbox).style(normal_style),
                 Cell::from(record.id.to_string()).style(normal_style),
-                Cell::from(record.patient_id.to_string()).style(normal_style),
+                Cell::from(first_name).style(normal_style), // First Name instead of patient_id
+                Cell::from(last_name).style(normal_style),  // Last Name as a new column
                 Cell::from(record.diagnosis.clone()).style(normal_style),
             ]));
         }
@@ -533,6 +598,7 @@ impl Component for DeleteRecord {
             rows.push(Row::new(vec![
                 Cell::from(""),
                 Cell::from(""),
+                Cell::from(""), // Additional empty cell for the new column
                 Cell::from(message).style(Style::default().fg(Color::Rgb(180, 180, 200))),
                 Cell::from(""),
             ]));
@@ -541,17 +607,19 @@ impl Component for DeleteRecord {
         let table = Table::new(
             rows,
             [
-                Constraint::Length(5),
-                Constraint::Length(8),
-                Constraint::Length(12),
-                Constraint::Min(20),
+                Constraint::Length(5),  // Checkbox
+                Constraint::Length(8),  // ID
+                Constraint::Length(12), // First Name
+                Constraint::Length(12), // Last Name
+                Constraint::Min(20),    // Diagnosis
             ],
         )
         .header(
             Row::new(vec![
                 Cell::from(""),
                 Cell::from("ID").style(Style::default().add_modifier(Modifier::BOLD)),
-                Cell::from("Patient ID").style(Style::default().add_modifier(Modifier::BOLD)),
+                Cell::from("First Name").style(Style::default().add_modifier(Modifier::BOLD)),
+                Cell::from("Last Name").style(Style::default().add_modifier(Modifier::BOLD)),
                 Cell::from("Diagnosis").style(Style::default().add_modifier(Modifier::BOLD)),
             ])
             .style(
@@ -605,7 +673,7 @@ impl Component for DeleteRecord {
                 .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
                 .split(layout[4]);
 
-            let help_text1 = Paragraph::new("/ or s: Search | ↑/↓: Navigate | Space: Toggle | A: Select/deselect all | R: Refresh")
+            let help_text1 = Paragraph::new(" / or s: Search | ↑/↓: Navigate | Space: Toggle | A: Select/deselect all | R: Refresh")
                 .style(Style::default().fg(Color::Rgb(180, 180, 200)))
                 .alignment(Alignment::Center);
 
