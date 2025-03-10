@@ -24,15 +24,15 @@ pub struct Home {
 impl Home {
     pub fn new() -> Self {
         let features = vec![
-            "Billing & Finance",
-            "Medical Records",
+            "Billing & Finance Management",
+            "Medical Records Management",
             "Patient Management",
-            "Reports & Analytics",
-            "Staff Scheduling",
+            "Hospital Analytics",
+            "Staff Management",
         ];
 
         let submenu_options = vec![
-            vec!["Generate Invoice", "View Invoices", "Update Invoice"],
+            vec!["Create Bill/Invoice", "View Invoices", "Update Invoice"],
             vec![
                 "Store Record",
                 "Retrieve Records",
@@ -47,11 +47,11 @@ impl Home {
             ],
             vec!["Generate Report", "Export Reports"],
             vec![
-                "Add Staff",
+                "Add New Staff",
                 "Assign Shift",
                 "Delete Staff",
-                "List Staff",
-                "Update Staff",
+                "List Staffs",
+                "Update Staffs",
             ],
         ];
 
