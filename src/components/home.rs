@@ -1,9 +1,3 @@
-//! Home component for Rustoria.
-//!
-//! This module defines the home screen component, which provides the main interface for navigating the application's features.
-//! It includes UI elements such as feature lists, submenus, and a logout confirmation dialog.
-//! It handles user input for navigation, menu selection, and logout actions.
-
 use crate::app::SelectedApp;
 use crate::components::Component;
 use crate::db;
@@ -15,68 +9,43 @@ use ratatui::{
     widgets::{Block, BorderType, Borders, Clear, List, ListItem, ListState, Padding, Paragraph},
 };
 
-/// Represents the home screen UI component.
 pub struct Home {
-    /// The logged-in user's username.
     username: Option<String>,
-    /// Selection mode: 0 for menus, 1 for back button
     selection_mode: usize,
-    /// Show logout confirmation dialog
     show_logout_dialog: bool,
-    /// Logout dialog selected option (0: Yes, 1: No)
     logout_dialog_selected: usize,
-    /// Active panel (0 for left/features, 1 for right/submenus)
     active_panel: usize,
-    /// Selected feature in the left panel
     selected_feature_index: usize,
-    /// Submenu states for each feature
     submenu_states: Vec<ListState>,
-    /// Feature names
     features: Vec<&'static str>,
-    /// Submenu options for each feature
     submenu_options: Vec<Vec<&'static str>>,
 }
 
 impl Home {
-    /// Creates a new `Home` component.
     pub fn new() -> Self {
-        // Define feature names
         let features = vec![
             "Billing & Finance",
-            "Inventory Management",
             "Medical Records",
             "Patient Management",
             "Reports & Analytics",
             "Staff Scheduling",
         ];
 
-        // Define submenu options for each feature
         let submenu_options = vec![
-            // Billing & Finance
-            vec![
-                "Generate Invoice",
-                "View Billing Reports",
-                "Process Payment",
-            ],
-            // Inventory Management
-            vec!["Add Inventory", "Check Stock", "Auto Reorder"],
-            // Medical Records
+            vec!["Generate Invoice", "View Invoices", "Update Invoice"],
             vec![
                 "Store Record",
                 "Retrieve Records",
                 "Update Record",
                 "Delete Record",
             ],
-            // Patient Management
             vec![
                 "Add Patient",
                 "List Patients",
                 "Update Patient",
                 "Delete Patient",
             ],
-            // Reports & Analytics
             vec!["Generate Report", "Export Reports"],
-            // Staff Scheduling
             vec![
                 "Add Staff",
                 "Assign Shift",
@@ -86,7 +55,6 @@ impl Home {
             ],
         ];
 
-        // Initialize submenu states for each feature
         let mut submenu_states = Vec::new();
         for _ in 0..features.len() {
             let mut state = ListState::default();
@@ -107,31 +75,11 @@ impl Home {
         }
     }
 
-    /// Loads the username from the database.
-    ///
-    /// # Arguments
-    ///
-    /// * `user_id` - The ID of the user whose username should be loaded.
-    ///
-    /// # Returns
-    ///
-    /// * `Result<()>` - Returns `Ok(())` if the username is loaded successfully, or an error if there's a database issue.
     pub fn load_username(&mut self, user_id: i64) -> Result<()> {
         self.username = Some(db::get_username(user_id)?);
         Ok(())
     }
 
-    /// Handles user input events.
-    ///
-    /// This function processes keyboard input to navigate the UI, select menu items, and handle the logout process.
-    ///
-    /// # Arguments
-    ///
-    /// * `key` - The key event received from the terminal.
-    ///
-    /// # Returns
-    ///
-    /// * `Result<Option<SelectedApp>>` -  Returns `Ok(Some(SelectedApp))` if a menu item is selected that navigates to a new app, `Ok(Some(SelectedApp::None))` if the user logs out, `Ok(None)` if the input is handled within the Home component, or `Err` if an error occurs.
     pub fn handle_input(&mut self, key: KeyEvent) -> Result<Option<SelectedApp>> {
         if self.show_logout_dialog {
             return self.handle_logout_dialog_input(key);
@@ -139,32 +87,27 @@ impl Home {
 
         match key.code {
             KeyCode::Tab => {
-                // Toggle between menu selection and back button
                 self.selection_mode = (self.selection_mode + 1) % 2;
             }
             KeyCode::Left => {
                 if self.selection_mode == 0 && self.active_panel == 1 {
-                    // Move from right panel to left panel
                     self.active_panel = 0;
                 }
             }
             KeyCode::Right => {
                 if self.selection_mode == 0 && self.active_panel == 0 {
-                    // Move from left panel to right panel
                     self.active_panel = 1;
                 }
             }
             KeyCode::Up => {
                 if self.selection_mode == 0 {
                     if self.active_panel == 0 {
-                        // Navigate in the features panel (left)
                         if self.selected_feature_index > 0 {
                             self.selected_feature_index -= 1;
                         } else {
                             self.selected_feature_index = self.features.len() - 1;
                         }
                     } else {
-                        // Navigate in the submenu panel (right)
                         let submenu_state = &mut self.submenu_states[self.selected_feature_index];
                         if let Some(i) = submenu_state.selected() {
                             let max_index =
@@ -178,11 +121,9 @@ impl Home {
             KeyCode::Down => {
                 if self.selection_mode == 0 {
                     if self.active_panel == 0 {
-                        // Navigate in the features panel (left)
                         self.selected_feature_index =
                             (self.selected_feature_index + 1) % self.features.len();
                     } else {
-                        // Navigate in the submenu panel (right)
                         let submenu_state = &mut self.submenu_states[self.selected_feature_index];
                         if let Some(i) = submenu_state.selected() {
                             let max_index =
@@ -196,77 +137,63 @@ impl Home {
             KeyCode::Enter => {
                 if self.selection_mode == 0 {
                     if self.active_panel == 1 {
-                        // Selected a submenu item - navigate to appropriate screen
                         let feature_idx = self.selected_feature_index;
                         let submenu_idx = self.submenu_states[feature_idx].selected().unwrap_or(0);
 
-                        // Return different SelectedApp based on feature and submenu
                         return Ok(Some(match feature_idx {
-                            // Billing & Finance
                             0 => match submenu_idx {
-                                // 0 => SelectedApp::BillingInvoice,    // Generate Invoice
-                                // 1 => SelectedApp::BillingReports,    // View Billing Reports
-                                // 2 => SelectedApp::BillingPayment,    // Process Payment
+                                0 => SelectedApp::BillingInvoice,
+                                1 => SelectedApp::BillingView,
+                                2 => SelectedApp::BillingUpdate,
                                 _ => SelectedApp::Hospital,
                             },
-                            // Inventory Management
+
                             1 => match submenu_idx {
-                                // 0 => SelectedApp::InventoryAdd,      // Add Inventory
-                                // 1 => SelectedApp::InventoryCheck,    // Check Stock
-                                // 2 => SelectedApp::InventoryReorder,  // Auto Reorder
+                                0 => SelectedApp::RecordStore,
+                                1 => SelectedApp::RecordRetrieve,
+                                2 => SelectedApp::RecordUpdate,
+                                3 => SelectedApp::RecordDelete,
                                 _ => SelectedApp::Hospital,
                             },
-                            // Medical Records
+
                             2 => match submenu_idx {
-                                0 => SelectedApp::RecordStore,    // Store Record
-                                1 => SelectedApp::RecordRetrieve, // Retrieve Records
-                                2 => SelectedApp::RecordUpdate,   // Update Record
-                                3 => SelectedApp::RecordDelete,   // Update Record
+                                0 => SelectedApp::PatientAdd,
+                                1 => SelectedApp::PatientList,
+                                2 => SelectedApp::PatientUpdate,
+                                3 => SelectedApp::PatientDelete,
                                 _ => SelectedApp::Hospital,
                             },
-                            // Patient Management
+                            // Analytics
                             3 => match submenu_idx {
-                                0 => SelectedApp::PatientAdd,    // Add Patient
-                                1 => SelectedApp::PatientList,   // List Patients
-                                2 => SelectedApp::PatientUpdate, // Update Patient
-                                3 => SelectedApp::PatientDelete, // Delete Patient
-                                _ => SelectedApp::Hospital,
-                            },
-                            // Reports & Analytics
-                            4 => match submenu_idx {
                                 // 0 => SelectedApp::ReportsGenerate,   // Generate Report
                                 // 1 => SelectedApp::ReportsExport,     // Export Reports
                                 _ => SelectedApp::Hospital,
                             },
-                            // Staff Scheduling
-                            5 => match submenu_idx {
-                                0 => SelectedApp::StaffAdd,    // Add Staff
-                                1 => SelectedApp::StaffAssign, // Assign Shift
-                                2 => SelectedApp::StaffDelete, // Delete Staff
-                                3 => SelectedApp::StaffList,   // List Staff
-                                4 => SelectedApp::StaffUpdate, // Update Staff
+
+                            4 => match submenu_idx {
+                                0 => SelectedApp::StaffAdd,
+                                1 => SelectedApp::StaffAssign,
+                                2 => SelectedApp::StaffDelete,
+                                3 => SelectedApp::StaffList,
+                                4 => SelectedApp::StaffUpdate,
                                 _ => SelectedApp::Hospital,
                             },
                             _ => SelectedApp::Hospital,
                         }));
                     } else {
-                        // If in left panel, move to right panel
                         self.active_panel = 1;
                     }
                 } else {
-                    // Logout button - show confirmation dialog
                     self.show_logout_dialog = true;
-                    self.logout_dialog_selected = 1; // Default to "No"
+                    self.logout_dialog_selected = 1;
                 }
             }
             KeyCode::Esc => {
                 if self.active_panel == 1 {
-                    // If in right panel, go back to left panel
                     self.active_panel = 0;
                 } else {
-                    // If in left panel, show logout confirmation
                     self.show_logout_dialog = true;
-                    self.logout_dialog_selected = 1; // Default to "No"
+                    self.logout_dialog_selected = 1;
                 }
             }
             _ => {}
@@ -275,31 +202,19 @@ impl Home {
         Ok(None)
     }
 
-    /// Handles user input within the logout confirmation dialog.
-    ///
-    /// Processes keyboard input for selecting "Yes" or "No" in the logout confirmation dialog.
-    ///
-    /// # Arguments
-    ///
-    /// * `key` - The key event received from the terminal.
-    ///
-    /// # Returns
-    ///
-    /// * `Result<Option<SelectedApp>>` - Returns `Ok(Some(SelectedApp::None))` if the user confirms logout (selects "Yes"),  `Ok(None)` if the dialog is still active or cancelled, or `Err` if an error occurs.
     fn handle_logout_dialog_input(&mut self, key: KeyEvent) -> Result<Option<SelectedApp>> {
         match key.code {
             KeyCode::Left | KeyCode::Right => {
-                self.logout_dialog_selected = 1 - self.logout_dialog_selected; // Toggle between Yes/No
+                self.logout_dialog_selected = 1 - self.logout_dialog_selected;
             }
             KeyCode::Enter => {
                 self.show_logout_dialog = false;
                 if self.logout_dialog_selected == 0 {
-                    // Yes selected - logout
                     return Ok(Some(SelectedApp::None));
                 }
             }
             KeyCode::Esc => {
-                self.show_logout_dialog = false; // Cancel dialog
+                self.show_logout_dialog = false;
             }
             _ => {}
         }
@@ -308,31 +223,11 @@ impl Home {
 }
 
 impl Component for Home {
-    /// Handles input events for the `Home` component.
-    ///
-    /// This function simply calls the `handle_input` method of the `Home` struct.
-    ///
-    /// # Arguments
-    ///
-    /// * `event` - The key event to handle.
-    ///
-    /// # Returns
-    ///
-    /// * `Result<Option<SelectedApp>>` - Returns the result of `handle_input`.
     fn handle_input(&mut self, event: KeyEvent) -> Result<Option<SelectedApp>> {
         self.handle_input(event)
     }
 
-    /// Renders the `Home` component to the terminal.
-    ///
-    /// This function draws the UI elements of the home screen, including the welcome message,
-    /// feature list, submenu options, and logout confirmation dialog.
-    ///
-    /// # Arguments
-    ///
-    /// * `frame` - A mutable reference to the `Frame` used for rendering.
     fn render(&self, frame: &mut Frame) {
-        // Apply global background
         frame.render_widget(
             Block::default().style(Style::default().bg(Color::Rgb(16, 16, 28))),
             frame.area(),
@@ -340,19 +235,17 @@ impl Component for Home {
 
         let area = frame.area();
 
-        // Main vertical layout
         let main_layout = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(5), // Welcome banner area
-                Constraint::Length(1), // Instruction text
-                Constraint::Min(10),   // Main content area
-                Constraint::Length(3), // Help text
-                Constraint::Length(3), // Logout button
+                Constraint::Length(5),
+                Constraint::Length(1),
+                Constraint::Min(10),
+                Constraint::Length(3),
+                Constraint::Length(3),
             ])
             .split(area);
 
-        // Welcome banner with gradient background
         let username = self.username.as_deref().unwrap_or("User");
         let welcome_text = Line::from(vec![
             Span::styled(
@@ -384,25 +277,19 @@ impl Component for Home {
 
         frame.render_widget(welcome_paragraph, welcome_inner);
 
-        // Instruction text
         let instruction = Paragraph::new("Please select a task:")
             .style(Style::default().fg(Color::Rgb(180, 190, 254)))
             .alignment(Alignment::Center);
 
         frame.render_widget(instruction, main_layout[1]);
 
-        // Main content area - split into left and right panels
         let content_layout = Layout::default()
             .direction(Direction::Horizontal)
-            .constraints([
-                Constraint::Percentage(40), // Left panel (features)
-                Constraint::Percentage(60), // Right panel (submenu)
-            ])
+            .constraints([Constraint::Percentage(40), Constraint::Percentage(60)])
             .spacing(2)
             .margin(1)
             .split(main_layout[2]);
 
-        // Left panel - Hospital Management Features
         let left_panel_style = if self.active_panel == 0 && self.selection_mode == 0 {
             Style::default().fg(Color::Rgb(250, 250, 110))
         } else {
@@ -424,16 +311,11 @@ impl Component for Home {
         frame.render_widget(left_panel_block.clone(), content_layout[0]);
         let left_inner = left_panel_block.inner(content_layout[0]);
 
-        // Apply padding to left panel content with extra top padding
         let left_padded = Layout::default()
             .direction(Direction::Vertical)
-            .constraints([
-                Constraint::Length(2), // Added extra top padding
-                Constraint::Min(1),
-            ])
+            .constraints([Constraint::Length(2), Constraint::Min(1)])
             .split(left_inner);
 
-        // Left panel content (Feature list)
         let feature_items: Vec<ListItem> = self
             .features
             .iter()
@@ -459,7 +341,6 @@ impl Component for Home {
                     "   "
                 };
 
-                // Add icons for each feature
                 let icon = match idx {
                     0 => "💰",
                     1 => "📦",
@@ -484,7 +365,6 @@ impl Component for Home {
 
         frame.render_widget(features_list, left_padded[1]);
 
-        // Right panel - Submenu options
         let right_panel_style = if self.active_panel == 1 && self.selection_mode == 0 {
             Style::default().fg(Color::Rgb(250, 250, 110))
         } else {
@@ -506,11 +386,9 @@ impl Component for Home {
         frame.render_widget(right_panel_block.clone(), content_layout[1]);
         let right_inner = right_panel_block.inner(content_layout[1]);
 
-        // Current submenu options for the selected feature
         let current_submenu = &self.submenu_options[self.selected_feature_index];
         let current_submenu_state = &self.submenu_states[self.selected_feature_index];
 
-        // Right panel content (Submenu list) - without the feature name as title
         let submenu_items: Vec<ListItem> = current_submenu
             .iter()
             .enumerate()
@@ -548,7 +426,7 @@ impl Component for Home {
             );
 
         frame.render_widget(submenu_list, right_inner);
-        // Help text
+
         let help_text =
             "←→: Switch panels | ↑↓: Navigate | Enter: Select | Tab: Logout | Esc: Back";
         let help_paragraph = Paragraph::new(help_text)
@@ -557,7 +435,6 @@ impl Component for Home {
 
         frame.render_widget(help_paragraph, main_layout[3]);
 
-        // Logout button
         let back_text = if self.selection_mode == 1 {
             "[ Logout ]"
         } else {
@@ -591,7 +468,6 @@ impl Component for Home {
 
         frame.render_widget(back_paragraph, inner_logout);
 
-        // Render logout confirmation dialog if needed
         if self.show_logout_dialog {
             self.render_logout_dialog(frame, area);
         }
@@ -599,14 +475,6 @@ impl Component for Home {
 }
 
 impl Home {
-    /// Renders the logout confirmation dialog.
-    ///
-    /// This function displays a dialog box asking the user to confirm their logout.
-    ///
-    /// # Arguments
-    ///
-    /// * `frame` - A mutable reference to the `Frame` used for rendering.
-    /// * `area` - The `Rect` representing the available area for rendering.
     fn render_logout_dialog(&self, frame: &mut Frame, area: Rect) {
         let dialog_width = 40;
         let dialog_height = 8;
@@ -618,10 +486,8 @@ impl Home {
             dialog_height,
         );
 
-        // Clear the background
         frame.render_widget(Clear, dialog_area);
 
-        // Render dialog box - updated to match the app theme
         let dialog_block = Block::default()
             .title(" Confirm Logout ")
             .title_style(
@@ -636,16 +502,12 @@ impl Home {
 
         frame.render_widget(dialog_block.clone(), dialog_area);
 
-        // Dialog content
         let inner_area = dialog_block.inner(dialog_area);
 
         let content_layout = Layout::default()
             .direction(Direction::Vertical)
             .margin(1)
-            .constraints([
-                Constraint::Length(2), // Message
-                Constraint::Length(2), // Buttons
-            ])
+            .constraints([Constraint::Length(2), Constraint::Length(2)])
             .split(inner_area);
 
         let message = Paragraph::new("Are you sure you want to logout?")
@@ -655,13 +517,11 @@ impl Home {
 
         frame.render_widget(message, content_layout[0]);
 
-        // Buttons
         let buttons_layout = Layout::default()
             .direction(Direction::Horizontal)
             .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
             .split(content_layout[1]);
 
-        // Updated button styles to match the app theme
         let yes_style = if self.logout_dialog_selected == 0 {
             Style::default()
                 .fg(Color::Rgb(140, 219, 140))
