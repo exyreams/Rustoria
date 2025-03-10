@@ -1,13 +1,3 @@
-//! Assign Staff component for the Hospital application.
-//!
-//! This module provides a UI for assigning shifts to staff members. It features:
-//! - Staff selection using a searchable table.
-//! - Date selection using a 6-month calendar widget.
-//! - Shift selection with arrow-based navigation.
-//! - View assigned shifts for staff members.
-//! - Confirmation dialog before saving.
-//! - Error and success message handling.
-
 use crate::app::SelectedApp;
 use crate::components::Component;
 use crate::db;
@@ -21,78 +11,48 @@ use std::time::{Duration, Instant};
 use time::macros::format_description;
 use time::Date;
 
-/// Represents the different shifts available.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Shift {
-    /// Morning shift.
     Morning,
-    /// Afternoon shift.
     Afternoon,
-    /// Night shift.
     Night,
 }
 
-/// Represents the different states of the AssignStaff component.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AssignState {
-    /// The user is selecting a staff member.
     SelectingStaff,
-    /// The user is selecting a date.
     SelectingDate,
-    /// The user is selecting a shift.
     SelectingShift,
-    /// The user is viewing assigned shifts for a staff member.
     ViewingAssignments,
-    /// The user is confirming the assignment (this state is handled directly in the input and render methods).
     #[allow(dead_code)]
     Confirming,
 }
 
-/// Component for assigning shifts to staff members.
 pub struct AssignStaff {
-    /// All staff (for the selection table).
     staff: Vec<StaffMember>,
-    /// Filtered staff based on search input.
     filtered_staff: Vec<StaffMember>,
-    /// Search input for filtering staff.
     search_input: String,
-    /// Flag indicating if search is active.
     is_searching: bool,
-    /// Table state for staff selection.
     table_state: TableState,
-    /// List state for shift selection.
     shift_list_state: ListState,
-    /// The selected staff member.
     selected_staff: Option<StaffMember>,
-    /// Current state of the component.
     assign_state: AssignState,
-    /// The date selected in the calendar.
     selected_date: Option<Date>,
-    /// The selected shift (Morning, Afternoon, Night).
     selected_shift: Option<Shift>,
-    /// Whether the confirmation dialog is visible.
     show_confirmation: bool,
-    // Which confirmation button is selected (0 for Yes, 1 for No)
     confirmation_selected: usize,
-    /// Error message, if any.
     error_message: Option<String>,
-    /// Timer for error message display.
     error_timer: Option<Instant>,
-    /// Success message, if any.
     success_message: Option<String>,
-    /// Timer for success message display.
     success_timer: Option<Instant>,
-    /// Cached staff assignments for viewing
     staff_assignments: Vec<(Date, String)>,
-    /// Currently focused month index (for Tab navigation)
     focused_month: usize,
 }
 
 impl AssignStaff {
-    /// Creates a new `AssignStaff` component.
     pub fn new() -> Self {
         let mut shift_list_state = ListState::default();
-        shift_list_state.select(Some(0)); // Default to first shift
+        shift_list_state.select(Some(0));
 
         Self {
             staff: Vec::new(),
@@ -111,17 +71,15 @@ impl AssignStaff {
             success_message: None,
             success_timer: None,
             staff_assignments: Vec::new(),
-            focused_month: 0,         // Start with the first month focused
-            confirmation_selected: 0, // Default to "Yes"
+            focused_month: 0,
+            confirmation_selected: 0,
         }
     }
 
-    /// Fetches all staff members from the database.
     pub fn fetch_staff(&mut self) -> Result<()> {
         self.staff = db::get_all_staff()?;
         self.filter_staff();
 
-        // Select the first item if the filtered list is not empty.
         if !self.filtered_staff.is_empty() {
             self.table_state.select(Some(0));
         } else {
@@ -131,9 +89,7 @@ impl AssignStaff {
         Ok(())
     }
 
-    /// Fetches assigned shifts for a staff member.
     fn fetch_staff_assignments(&mut self, staff_id: i64) -> Result<()> {
-        // Call the database function to get assigned shifts
         match db::get_assigned_shifts_for_staff(staff_id) {
             Ok(assignments) => {
                 self.staff_assignments = assignments;
@@ -143,7 +99,6 @@ impl AssignStaff {
         }
     }
 
-    /// Filters the staff list based on the current search input.
     fn filter_staff(&mut self) {
         if self.search_input.is_empty() {
             self.filtered_staff = self.staff.clone();
@@ -161,7 +116,6 @@ impl AssignStaff {
                 .collect();
         }
 
-        // Always select the first item after filtering if list isn't empty
         if !self.filtered_staff.is_empty() {
             self.table_state.select(Some(0));
         } else {
@@ -169,7 +123,6 @@ impl AssignStaff {
         }
     }
 
-    /// Selects the next staff member in the table.
     fn select_next_staff(&mut self) {
         if self.filtered_staff.is_empty() {
             return;
@@ -187,7 +140,6 @@ impl AssignStaff {
         self.table_state.select(Some(i));
     }
 
-    /// Selects the previous staff member in the table.
     fn select_previous_staff(&mut self) {
         if self.filtered_staff.is_empty() {
             return;
@@ -205,22 +157,18 @@ impl AssignStaff {
         self.table_state.select(Some(i));
     }
 
-    /// Loads the selected staff member from the table.
     fn load_selected_staff(&mut self) -> Result<()> {
         if let Some(selected) = self.table_state.selected() {
             if selected < self.filtered_staff.len() {
                 self.selected_staff = Some(self.filtered_staff[selected].clone());
                 self.assign_state = AssignState::SelectingDate;
 
-                // Initialize the selected date to today if not already set
                 if self.selected_date.is_none() {
                     self.selected_date = Some(time::OffsetDateTime::now_utc().date());
                 }
 
-                // Reset focused month when entering date selection
                 self.focused_month = 0;
 
-                // Fetch assigned shifts for the selected staff member.
                 self.fetch_staff_assignments(self.filtered_staff[selected].id)?;
 
                 return Ok(());
@@ -230,15 +178,12 @@ impl AssignStaff {
         Err(anyhow::anyhow!("No staff selected"))
     }
 
-    /// Cycles to the next month in calendar view when Tab is pressed
     fn cycle_month_focus(&mut self) {
         self.focused_month = (self.focused_month + 1) % 6;
 
-        // Update selected date to be day 1 of the focused month
         let today = time::OffsetDateTime::now_utc().date();
         let mut current_date = today;
 
-        // Find the selected month based on focused_month
         for _ in 0..self.focused_month {
             if let Some(next_month) = current_date.checked_add(time::Duration::days(32)) {
                 current_date =
@@ -247,19 +192,16 @@ impl AssignStaff {
             }
         }
 
-        // Set selected date to the 1st of the focused month
         self.selected_date = Some(
             time::Date::from_calendar_date(current_date.year(), current_date.month(), 1)
                 .unwrap_or(current_date),
         );
     }
 
-    /// Handles arrow key navigation within date selection, keeping within current month
     fn navigate_date(&mut self, direction: &str) {
         if let Some(date) = self.selected_date {
             let new_date = match direction {
                 "left" => {
-                    // Go to previous day, but stay in current month
                     if date.day() > 1 {
                         if let Some(prev) = date.previous_day() {
                             prev
@@ -267,14 +209,12 @@ impl AssignStaff {
                             date
                         }
                     } else {
-                        // Wrap to end of month
                         let days_in_month = self.get_days_in_month(date.year(), date.month());
                         time::Date::from_calendar_date(date.year(), date.month(), days_in_month)
                             .unwrap_or(date)
                     }
                 }
                 "right" => {
-                    // Go to next day, but stay in current month
                     let days_in_month = self.get_days_in_month(date.year(), date.month());
                     if date.day() < days_in_month {
                         if let Some(next) = date.next_day() {
@@ -283,16 +223,13 @@ impl AssignStaff {
                             date
                         }
                     } else {
-                        // Wrap to beginning of month
                         time::Date::from_calendar_date(date.year(), date.month(), 1).unwrap_or(date)
                     }
                 }
                 "up" => {
-                    // Go up a week, but stay in current month
                     let new_day = if date.day() > 7 {
                         date.day() - 7
                     } else {
-                        // Wrap to last part of month
                         let days_in_month = self.get_days_in_month(date.year(), date.month());
                         let offset = 7 - date.day();
                         if days_in_month >= date.day() + (7 - offset) {
@@ -306,12 +243,10 @@ impl AssignStaff {
                         .unwrap_or(date)
                 }
                 "down" => {
-                    // Go down a week, but stay in current month
                     let days_in_month = self.get_days_in_month(date.year(), date.month());
                     let new_day = if date.day() + 7 <= days_in_month {
                         date.day() + 7
                     } else {
-                        // Wrap to first part of month
                         date.day() + 7 - days_in_month
                     };
 
@@ -323,12 +258,10 @@ impl AssignStaff {
 
             self.selected_date = Some(new_date);
 
-            // Update focused_month to match the month of the selected date
             let today = time::OffsetDateTime::now_utc().date();
             let mut current_date = today;
             let mut month_index = 0;
 
-            // Find the index of the month containing the selected date
             for i in 0..6 {
                 if new_date.year() == current_date.year()
                     && new_date.month() == current_date.month()
@@ -350,7 +283,6 @@ impl AssignStaff {
         }
     }
 
-    /// Helper function to get the number of days in a month
     fn get_days_in_month(&self, year: i32, month: time::Month) -> u8 {
         let current = time::Date::from_calendar_date(year, month, 1).unwrap();
         let next_month = if month == time::Month::December {
@@ -365,7 +297,6 @@ impl AssignStaff {
         days_diff as u8
     }
 
-    /// Handles the assignment of the shift in the database.
     fn assign_shift(&mut self) -> Result<()> {
         if let (Some(staff), Some(date), Some(shift)) = (
             &self.selected_staff,
@@ -399,7 +330,6 @@ impl AssignStaff {
         }
     }
 
-    /// Resets the component to its initial state.
     fn reset(&mut self) {
         self.selected_staff = None;
         self.selected_date = None;
@@ -411,32 +341,27 @@ impl AssignStaff {
         self.staff_assignments.clear();
         self.focused_month = 0;
 
-        // Refresh staff data
         if let Ok(staff) = db::get_all_staff() {
             self.staff = staff;
             self.filter_staff();
         }
     }
 
-    /// Sets an error message and starts the error timer.
     fn set_error(&mut self, message: String) {
         self.error_message = Some(message);
         self.error_timer = Some(Instant::now());
     }
 
-    /// Clears the error message and timer.
     fn clear_error(&mut self) {
         self.error_message = None;
         self.error_timer = None;
     }
 
-    /// Clears the success message and timer.
     fn clear_success(&mut self) {
         self.success_message = None;
         self.success_timer = None;
     }
 
-    /// Checks if the error message timeout has been reached.
     fn check_error_timeout(&mut self) {
         if let Some(timer) = self.error_timer {
             if timer.elapsed() > Duration::from_secs(5) {
@@ -445,7 +370,6 @@ impl AssignStaff {
         }
     }
 
-    /// Checks if the success message timeout has been reached.
     fn check_success_timeout(&mut self) {
         if let Some(timer) = self.success_timer {
             if timer.elapsed() > Duration::from_secs(5) {
@@ -454,17 +378,14 @@ impl AssignStaff {
         }
     }
 
-    /// Checks both error and success message timeouts.
     fn check_timeouts(&mut self) {
         self.check_error_timeout();
         self.check_success_timeout();
     }
 
-    /// Handles user input events for the component.
     fn handle_input(&mut self, key: KeyEvent) -> Result<Option<SelectedApp>> {
         self.check_timeouts();
 
-        // Handle confirmation dialog if it's shown
         if self.show_confirmation {
             match key.code {
                 KeyCode::Left | KeyCode::Right => {
@@ -472,7 +393,6 @@ impl AssignStaff {
                 }
                 KeyCode::Enter => {
                     if self.confirmation_selected == 0 {
-                        // Yes - assign
                         let _ = self.assign_shift();
                     }
                     self.show_confirmation = false;
@@ -486,164 +406,141 @@ impl AssignStaff {
         }
 
         match self.assign_state {
-            AssignState::SelectingStaff => {
-                match key.code {
-                    // Search mode handling
-                    KeyCode::Char(c) if self.is_searching => {
-                        self.search_input.push(c);
-                        self.filter_staff();
-                        self.clear_error();
-                    }
-                    KeyCode::Backspace if self.is_searching => {
-                        self.search_input.pop();
-                        self.filter_staff();
-                        self.clear_error();
-                    }
-                    KeyCode::Down if self.is_searching && !self.filtered_staff.is_empty() => {
-                        // Move focus from search field to table
-                        self.is_searching = false;
-                        self.table_state.select(Some(0));
-                    }
-                    KeyCode::Esc if self.is_searching => {
-                        // Cancel search
-                        self.is_searching = false;
-                        self.search_input.clear();
-                        self.filter_staff();
-                    }
-                    KeyCode::Char('/') | KeyCode::Char('s') | KeyCode::Char('S')
-                        if !self.is_searching =>
-                    {
-                        self.is_searching = true; // Start searching.
-                    }
+            AssignState::SelectingStaff => match key.code {
+                KeyCode::Char(c) if self.is_searching => {
+                    self.search_input.push(c);
+                    self.filter_staff();
+                    self.clear_error();
+                }
+                KeyCode::Backspace if self.is_searching => {
+                    self.search_input.pop();
+                    self.filter_staff();
+                    self.clear_error();
+                }
+                KeyCode::Down if self.is_searching && !self.filtered_staff.is_empty() => {
+                    self.is_searching = false;
+                    self.table_state.select(Some(0));
+                }
+                KeyCode::Esc if self.is_searching => {
+                    self.is_searching = false;
+                    self.search_input.clear();
+                    self.filter_staff();
+                }
+                KeyCode::Char('/') | KeyCode::Char('s') | KeyCode::Char('S')
+                    if !self.is_searching =>
+                {
+                    self.is_searching = true;
+                }
 
-                    // Navigation in table
-                    KeyCode::Up => self.select_previous_staff(),
-                    KeyCode::Down => self.select_next_staff(),
+                KeyCode::Up => self.select_previous_staff(),
+                KeyCode::Down => self.select_next_staff(),
 
-                    // Staff selection
-                    KeyCode::Enter => {
-                        let _ = self.load_selected_staff();
-                    }
+                KeyCode::Enter => {
+                    let _ = self.load_selected_staff();
+                }
 
-                    // View assignments
-                    KeyCode::Char('v') | KeyCode::Char('V') => {
-                        if let Some(selected) = self.table_state.selected() {
-                            if selected < self.filtered_staff.len() {
-                                self.selected_staff = Some(self.filtered_staff[selected].clone());
-                                // Fetch assignments for the selected staff
-                                if let Err(e) =
-                                    self.fetch_staff_assignments(self.filtered_staff[selected].id)
-                                {
-                                    self.set_error(format!("Failed to load assignments: {}", e));
-                                } else {
-                                    self.assign_state = AssignState::ViewingAssignments;
-                                }
+                KeyCode::Char('v') | KeyCode::Char('V') => {
+                    if let Some(selected) = self.table_state.selected() {
+                        if selected < self.filtered_staff.len() {
+                            self.selected_staff = Some(self.filtered_staff[selected].clone());
+
+                            if let Err(e) =
+                                self.fetch_staff_assignments(self.filtered_staff[selected].id)
+                            {
+                                self.set_error(format!("Failed to load assignments: {}", e));
                             } else {
-                                self.set_error("No staff selected".to_string());
+                                self.assign_state = AssignState::ViewingAssignments;
                             }
                         } else {
                             self.set_error("No staff selected".to_string());
                         }
+                    } else {
+                        self.set_error("No staff selected".to_string());
                     }
+                }
 
-                    KeyCode::Esc => {
-                        // Back to main menu
-                        return Ok(Some(SelectedApp::None));
-                    }
-                    _ => {}
+                KeyCode::Esc => {
+                    return Ok(Some(SelectedApp::None));
                 }
-            }
-            AssignState::SelectingDate => {
-                match key.code {
-                    KeyCode::Left => {
-                        self.navigate_date("left");
-                    }
-                    KeyCode::Right => {
-                        self.navigate_date("right");
-                    }
-                    KeyCode::Up => {
-                        self.navigate_date("up");
-                    }
-                    KeyCode::Down => {
-                        self.navigate_date("down");
-                    }
-                    KeyCode::Tab => {
-                        // Add Tab key to cycle through months
-                        self.cycle_month_focus();
-                    }
-                    KeyCode::Enter => {
-                        // Confirm date selection, move to shift selection.
-                        if self.selected_date.is_some() {
-                            self.assign_state = AssignState::SelectingShift;
-                            // Initialize shift selection
-                            self.selected_shift = Some(Shift::Morning);
-                            self.shift_list_state.select(Some(0));
-                        } else {
-                            self.selected_date = Some(time::OffsetDateTime::now_utc().date());
-                        }
-                    }
-                    KeyCode::Esc => {
-                        // Go back to staff selection.
-                        self.assign_state = AssignState::SelectingStaff;
-                    }
-                    _ => {}
+                _ => {}
+            },
+            AssignState::SelectingDate => match key.code {
+                KeyCode::Left => {
+                    self.navigate_date("left");
                 }
-            }
-            AssignState::SelectingShift => {
-                match key.code {
-                    // Navigate with arrows (new approach)
-                    KeyCode::Up => {
-                        let new_index = match self.shift_list_state.selected() {
-                            Some(0) => 2, // Wrap around to bottom
-                            Some(i) => i - 1,
-                            None => 0,
-                        };
-                        self.shift_list_state.select(Some(new_index));
-                        self.selected_shift = match new_index {
-                            0 => Some(Shift::Morning),
-                            1 => Some(Shift::Afternoon),
-                            2 => Some(Shift::Night),
-                            _ => Some(Shift::Morning),
-                        };
-                    }
-                    KeyCode::Down => {
-                        let new_index = match self.shift_list_state.selected() {
-                            Some(2) => 0, // Wrap around to top
-                            Some(i) => i + 1,
-                            None => 0,
-                        };
-                        self.shift_list_state.select(Some(new_index));
-                        self.selected_shift = match new_index {
-                            0 => Some(Shift::Morning),
-                            1 => Some(Shift::Afternoon),
-                            2 => Some(Shift::Night),
-                            _ => Some(Shift::Morning),
-                        };
-                    }
-                    KeyCode::Enter => {
-                        if self.selected_shift.is_some() {
-                            self.show_confirmation = true; // Show confirmation.
-                        }
-                    }
-                    KeyCode::Esc => {
-                        // Go back to date selection
-                        self.assign_state = AssignState::SelectingDate;
-                    }
-                    _ => {}
+                KeyCode::Right => {
+                    self.navigate_date("right");
                 }
-            }
-            AssignState::ViewingAssignments => {
-                match key.code {
-                    KeyCode::Esc => {
-                        // Go back to staff selection
-                        self.assign_state = AssignState::SelectingStaff;
-                    }
-                    _ => {}
+                KeyCode::Up => {
+                    self.navigate_date("up");
                 }
-            }
-            AssignState::Confirming => {
-                // Handled at the beginning of the function
-            }
+                KeyCode::Down => {
+                    self.navigate_date("down");
+                }
+                KeyCode::Tab => {
+                    self.cycle_month_focus();
+                }
+                KeyCode::Enter => {
+                    if self.selected_date.is_some() {
+                        self.assign_state = AssignState::SelectingShift;
+
+                        self.selected_shift = Some(Shift::Morning);
+                        self.shift_list_state.select(Some(0));
+                    } else {
+                        self.selected_date = Some(time::OffsetDateTime::now_utc().date());
+                    }
+                }
+                KeyCode::Esc => {
+                    self.assign_state = AssignState::SelectingStaff;
+                }
+                _ => {}
+            },
+            AssignState::SelectingShift => match key.code {
+                KeyCode::Up => {
+                    let new_index = match self.shift_list_state.selected() {
+                        Some(0) => 2,
+                        Some(i) => i - 1,
+                        None => 0,
+                    };
+                    self.shift_list_state.select(Some(new_index));
+                    self.selected_shift = match new_index {
+                        0 => Some(Shift::Morning),
+                        1 => Some(Shift::Afternoon),
+                        2 => Some(Shift::Night),
+                        _ => Some(Shift::Morning),
+                    };
+                }
+                KeyCode::Down => {
+                    let new_index = match self.shift_list_state.selected() {
+                        Some(2) => 0,
+                        Some(i) => i + 1,
+                        None => 0,
+                    };
+                    self.shift_list_state.select(Some(new_index));
+                    self.selected_shift = match new_index {
+                        0 => Some(Shift::Morning),
+                        1 => Some(Shift::Afternoon),
+                        2 => Some(Shift::Night),
+                        _ => Some(Shift::Morning),
+                    };
+                }
+                KeyCode::Enter => {
+                    if self.selected_shift.is_some() {
+                        self.show_confirmation = true;
+                    }
+                }
+                KeyCode::Esc => {
+                    self.assign_state = AssignState::SelectingDate;
+                }
+                _ => {}
+            },
+            AssignState::ViewingAssignments => match key.code {
+                KeyCode::Esc => {
+                    self.assign_state = AssignState::SelectingStaff;
+                }
+                _ => {}
+            },
+            AssignState::Confirming => {}
         }
 
         Ok(None)
@@ -657,12 +554,10 @@ impl Default for AssignStaff {
 }
 
 impl Component for AssignStaff {
-    /// Handles user input events for the component.
     fn handle_input(&mut self, event: KeyEvent) -> Result<Option<SelectedApp>> {
         self.handle_input(event)
     }
 
-    /// Renders the component to the terminal.
     fn render(&self, frame: &mut Frame) {
         match self.assign_state {
             AssignState::SelectingStaff => self.render_staff_selection(frame),
@@ -678,17 +573,13 @@ impl Component for AssignStaff {
     }
 }
 
-// Rendering helper methods
 impl AssignStaff {
-    /// Renders the staff selection screen.
     fn render_staff_selection(&self, frame: &mut Frame) {
         let area = frame.area();
 
-        // Add a subtle background pattern
         let background = Block::default().style(Style::default().bg(Color::Rgb(16, 16, 28)));
         frame.render_widget(background, area);
 
-        // Create a very subtle pattern using direct buffer access
         for y in (0..area.height).step_by(4) {
             for x in (0..area.width).step_by(8) {
                 if (x + y) % 8 == 0 {
@@ -700,20 +591,18 @@ impl AssignStaff {
             }
         }
 
-        // Main layout with help text at bottom
         let layout = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(3), // Header
-                Constraint::Length(3), // Search input
-                Constraint::Min(5),    // Table
-                Constraint::Length(1), // Message area
-                Constraint::Length(2), // Help text
+                Constraint::Length(3),
+                Constraint::Length(3),
+                Constraint::Min(5),
+                Constraint::Length(1),
+                Constraint::Length(2),
             ])
-            .margin(2) // Increased margin
+            .margin(2)
             .split(area);
 
-        // Header
         let header_block = Block::default()
             .borders(Borders::BOTTOM)
             .border_style(Style::default().fg(Color::Rgb(75, 75, 120)))
@@ -730,7 +619,6 @@ impl AssignStaff {
             .alignment(Alignment::Center);
         frame.render_widget(title, layout[0]);
 
-        // Search input field
         let search_block = Block::default()
             .borders(Borders::ALL)
             .border_type(BorderType::Rounded)
@@ -741,7 +629,7 @@ impl AssignStaff {
                     .add_modifier(Modifier::BOLD),
             ))
             .border_style(if self.is_searching {
-                Style::default().fg(Color::Rgb(250, 250, 110)) // Yellow when active
+                Style::default().fg(Color::Rgb(250, 250, 110))
             } else {
                 Style::default().fg(Color::Rgb(75, 75, 120))
             })
@@ -756,7 +644,6 @@ impl AssignStaff {
             .block(search_block);
         frame.render_widget(search_paragraph, layout[1]);
 
-        // Staff table
         let table_block = Block::default()
             .borders(Borders::ALL)
             .border_type(BorderType::Rounded)
@@ -785,7 +672,6 @@ impl AssignStaff {
             .bg(Color::Rgb(26, 26, 36))
             .fg(Color::Rgb(220, 220, 240));
 
-        // Create table rows
         let mut rows = Vec::new();
         for staff_member in &self.filtered_staff {
             rows.push(Row::new(vec![
@@ -803,15 +689,13 @@ impl AssignStaff {
         }
 
         if self.filtered_staff.is_empty() {
-            // Fix: Create a centered message without alignment method
             let message = if self.search_input.is_empty() {
                 "No staff found in database"
             } else {
                 "No staff match your search criteria"
             };
 
-            // Create a single centered cell that spans all columns
-            let table_width = layout[2].width as usize - 4; // Accounting for borders
+            let table_width = layout[2].width as usize - 4;
             let padded_message = format!("{:^width$}", message, width = table_width);
             rows.push(
                 Row::new(vec![Cell::from(padded_message)
@@ -820,20 +704,15 @@ impl AssignStaff {
             );
         }
 
-        // Adjust column widths to better distribute space
         let (constraints, header_cells) = if self.filtered_staff.is_empty() {
-            // When empty, use a single column constraint
-            (
-                vec![Constraint::Percentage(100)],
-                vec![Cell::from("")], // Empty header
-            )
+            (vec![Constraint::Percentage(100)], vec![Cell::from("")])
         } else {
             (
                 vec![
-                    Constraint::Length(6),      // ID - slightly smaller
-                    Constraint::Percentage(35), // Name - percentage based
-                    Constraint::Percentage(25), // Role - percentage based
-                    Constraint::Percentage(40), // Phone - wider to fill empty space
+                    Constraint::Length(6),
+                    Constraint::Percentage(35),
+                    Constraint::Percentage(25),
+                    Constraint::Percentage(40),
                 ],
                 vec![
                     Cell::from("ID").style(Style::default().add_modifier(Modifier::BOLD)),
@@ -858,11 +737,9 @@ impl AssignStaff {
             .row_highlight_style(selected_style)
             .highlight_symbol("► ");
 
-        // Fix: Create a mutable copy of the table state for rendering
         let mut table_state_copy = self.table_state.clone();
         frame.render_stateful_widget(table, layout[2], &mut table_state_copy);
 
-        // Display error message
         if let Some(error) = &self.error_message {
             let error_paragraph = Paragraph::new(error.as_str())
                 .style(
@@ -883,7 +760,6 @@ impl AssignStaff {
             frame.render_widget(success_paragraph, layout[3]);
         }
 
-        // Help text
         let help_text = if self.is_searching {
             "Type to search | ↓: To results | Esc: Cancel search"
         } else {
@@ -896,15 +772,12 @@ impl AssignStaff {
         frame.render_widget(help_paragraph, layout[4]);
     }
 
-    /// Renders the date selection screen using a 6-month calendar grid.
     fn render_date_selection(&self, frame: &mut Frame) {
         let area = frame.area();
 
-        // Add a subtle background pattern
         let background = Block::default().style(Style::default().bg(Color::Rgb(16, 16, 28)));
         frame.render_widget(background, area);
 
-        // Create a very subtle pattern using direct buffer access
         for y in (0..area.height).step_by(4) {
             for x in (0..area.width).step_by(8) {
                 if (x + y) % 8 == 0 {
@@ -916,20 +789,18 @@ impl AssignStaff {
             }
         }
 
-        // Main layout
         let layout = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(3), // Header
-                Constraint::Min(18),   // Calendar
-                Constraint::Length(2), // Legend
-                Constraint::Length(1), // Message area
-                Constraint::Length(2), // Help text
+                Constraint::Length(3),
+                Constraint::Min(18),
+                Constraint::Length(2),
+                Constraint::Length(1),
+                Constraint::Length(2),
             ])
-            .margin(2) // Added margin
+            .margin(2)
             .split(area);
 
-        // Header
         let header_block = Block::default()
             .borders(Borders::BOTTOM)
             .border_style(Style::default().fg(Color::Rgb(75, 75, 120)))
@@ -946,7 +817,6 @@ impl AssignStaff {
             .alignment(Alignment::Center);
         frame.render_widget(title, layout[0]);
 
-        // Create calendar grid (3x2 for 6 months)
         let calendar_area = Block::default()
             .borders(Borders::ALL)
             .border_type(BorderType::Rounded)
@@ -962,13 +832,11 @@ impl AssignStaff {
         let calendar_inner = calendar_area.inner(layout[1]);
         frame.render_widget(calendar_area, layout[1]);
 
-        // Split into two rows
         let calendar_rows = Layout::default()
             .direction(Direction::Vertical)
             .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
             .split(calendar_inner);
 
-        // Split each row into three columns
         let top_row = Layout::default()
             .direction(Direction::Horizontal)
             .constraints([
@@ -987,61 +855,48 @@ impl AssignStaff {
             ])
             .split(calendar_rows[1]);
 
-        // Get current date if no date is selected
         let today = time::OffsetDateTime::now_utc().date();
         let mut selected_date = self.selected_date.unwrap_or(today);
 
-        // Find the first available (non-past) date for initial selection
         let mut first_available_date = today;
         for _ in 0..365 {
-            // Check up to a year ahead
             if first_available_date >= today {
-                break; // Found a non-past date
+                break;
             }
             if let Some(next_day) = first_available_date.next_day() {
                 first_available_date = next_day;
             } else {
-                break; // Shouldn't happen, but handle edge case.
+                break;
             }
         }
-        // If selected_date is in the past, use the first available date
+
         if selected_date < today {
             selected_date = first_available_date;
         }
 
-        // Create calendar events store for styling dates
         let mut events = CalendarEventStore::default();
 
-        // Highlight the selected date with purplish background and white text
         events.add(
             selected_date,
             Style::default()
-                .fg(Color::Rgb(250, 250, 250)) // White text color for contrast
-                .bg(Color::Rgb(150, 80, 180)) // Purplish background
+                .fg(Color::Rgb(250, 250, 250))
+                .bg(Color::Rgb(150, 80, 180))
                 .add_modifier(Modifier::BOLD),
         );
 
-        // Highlight today with green background and white text, regardless of weekday
         events.add(
             today,
             Style::default()
-                .fg(Color::Rgb(250, 250, 250)) // White text
-                .bg(Color::Rgb(40, 120, 50)) // Green background
+                .fg(Color::Rgb(250, 250, 250))
+                .bg(Color::Rgb(40, 120, 50))
                 .add_modifier(Modifier::BOLD),
         );
 
-        // Highlight already assigned shifts with cyan background and dark text
         for (date, shift) in &self.staff_assignments {
             let shift_style = match shift.as_str() {
-                "Morning" => Style::default()
-                    .fg(Color::Rgb(20, 20, 50)) // Dark text
-                    .bg(Color::Cyan), // Cyan background
-                "Afternoon" => Style::default()
-                    .fg(Color::Rgb(20, 20, 50)) // Dark text
-                    .bg(Color::Cyan), // Cyan background
-                "Night" => Style::default()
-                    .fg(Color::Rgb(20, 20, 50)) // Dark text
-                    .bg(Color::Cyan), // Cyan background
+                "Morning" => Style::default().fg(Color::Rgb(20, 20, 50)).bg(Color::Cyan),
+                "Afternoon" => Style::default().fg(Color::Rgb(20, 20, 50)).bg(Color::Cyan),
+                "Night" => Style::default().fg(Color::Rgb(20, 20, 50)).bg(Color::Cyan),
 
                 _ => Style::default()
                     .fg(Color::Rgb(220, 220, 240))
@@ -1050,25 +905,20 @@ impl AssignStaff {
             events.add(*date, shift_style);
         }
 
-        // Default style for dates, and past dates.
         let default_style = Style::default()
             .fg(Color::Rgb(220, 220, 240))
             .bg(Color::Rgb(26, 26, 36));
 
-        let past_date_style = Style::default() // Style for past dates
-            .fg(Color::DarkGray) // DarkGray Text
+        let past_date_style = Style::default()
+            .fg(Color::DarkGray)
             .bg(Color::Rgb(26, 26, 36));
 
-        // Calculate dates for 6 months
         let mut month_dates = Vec::new();
         let mut current_date = today;
 
-        // Add current month
         month_dates.push(current_date);
 
-        // Add 5 future months
         for _ in 0..5 {
-            // Get next month (roughly by adding 32 days and then getting 1st of that month)
             if let Some(next_month) = current_date.checked_add(time::Duration::days(32)) {
                 current_date =
                     time::Date::from_calendar_date(next_month.year(), next_month.month(), 1)
@@ -1076,14 +926,12 @@ impl AssignStaff {
                 month_dates.push(current_date);
             }
         }
-        // Apply styles for dates
         let apply_date_styles = |date: Date, events: &mut CalendarEventStore| {
             if date < today {
-                events.add(date, past_date_style); // Apply past date style
+                events.add(date, past_date_style);
             }
         };
 
-        // Apply styling to dates in all months (spanning about 6 months)
         let start_date = today.checked_sub(time::Duration::days(60)).unwrap_or(today);
         let end_date = today
             .checked_add(time::Duration::days(180))
@@ -1100,11 +948,9 @@ impl AssignStaff {
             }
         }
 
-        // Render first row of months with month names in block titles
         for (i, month_date) in month_dates.iter().take(3).enumerate() {
             let month_name = format!(" {} {} ", month_date.month(), month_date.year());
 
-            // Highlight the month block that is currently focused (for Tab navigation)
             let border_style = if i == self.focused_month {
                 Style::default().fg(Color::Rgb(250, 250, 110))
             } else {
@@ -1132,10 +978,9 @@ impl AssignStaff {
                         .add_modifier(Modifier::BOLD),
                 )
                 .show_weekdays_header(
-                    // Weekdays header style
                     Style::default()
-                        .fg(Color::Black) // black text
-                        .bg(Color::Rgb(250, 250, 110)) // Yellow background
+                        .fg(Color::Black)
+                        .bg(Color::Rgb(250, 250, 110))
                         .add_modifier(Modifier::BOLD),
                 )
                 .default_style(default_style);
@@ -1143,11 +988,9 @@ impl AssignStaff {
             frame.render_widget(month, top_row[i]);
         }
 
-        // Render second row of months
         for (i, month_date) in month_dates.iter().skip(3).take(3).enumerate() {
             let month_name = format!(" {} {} ", month_date.month(), month_date.year());
 
-            // Highlight the month block that is currently focused (for Tab navigation)
             let border_style = if i + 3 == self.focused_month {
                 Style::default().fg(Color::Rgb(250, 250, 110))
             } else {
@@ -1175,10 +1018,9 @@ impl AssignStaff {
                         .add_modifier(Modifier::BOLD),
                 )
                 .show_weekdays_header(
-                    // Weekdays header style
                     Style::default()
-                        .fg(Color::Black) // Black text
-                        .bg(Color::Rgb(250, 250, 110)) // Yellow background
+                        .fg(Color::Black)
+                        .bg(Color::Rgb(250, 250, 110))
                         .add_modifier(Modifier::BOLD),
                 )
                 .default_style(default_style);
@@ -1186,7 +1028,6 @@ impl AssignStaff {
             frame.render_widget(month, bottom_row[i]);
         }
 
-        // Create a legend for the calendar with the improved styles
         let legend_layout = Layout::default()
             .direction(Direction::Horizontal)
             .constraints([
@@ -1199,27 +1040,26 @@ impl AssignStaff {
             .split(layout[2]);
 
         let today_legend = Paragraph::new(" ● Today ")
-            .style(Style::default().fg(Color::Rgb(40, 120, 50))) // Green text
+            .style(Style::default().fg(Color::Rgb(40, 120, 50)))
             .alignment(Alignment::Center);
 
         let selected_legend = Paragraph::new(" ● Selected ")
-            .style(Style::default().fg(Color::Rgb(150, 80, 180))) // Purplish text
+            .style(Style::default().fg(Color::Rgb(150, 80, 180)))
             .alignment(Alignment::Center);
 
-        let weekend_legend = Paragraph::new(" ● Weekend ") // weekend
-            .style(Style::default().fg(Color::Rgb(255, 100, 100))) // Red text
+        let weekend_legend = Paragraph::new(" ● Weekend ")
+            .style(Style::default().fg(Color::Rgb(255, 100, 100)))
             .alignment(Alignment::Center);
 
         let assigned_legend = Paragraph::new(" ● Assigned ")
-            .style(Style::default().fg(Color::Cyan)) // cyan text
+            .style(Style::default().fg(Color::Cyan))
             .alignment(Alignment::Center);
 
         frame.render_widget(today_legend, legend_layout[0]);
         frame.render_widget(selected_legend, legend_layout[1]);
-        frame.render_widget(weekend_legend, legend_layout[2]); // Add weekend
+        frame.render_widget(weekend_legend, legend_layout[2]);
         frame.render_widget(assigned_legend, legend_layout[3]);
 
-        // Display error message
         if let Some(error) = &self.error_message {
             let error_paragraph = Paragraph::new(error.as_str())
                 .style(
@@ -1231,7 +1071,6 @@ impl AssignStaff {
             frame.render_widget(error_paragraph, layout[3]);
         }
 
-        // Help text
         let help_text =
             "↑↓←→: Navigate within month | Tab: Switch month | Enter: Select date | Esc: Back";
         let help_paragraph = Paragraph::new(help_text)
@@ -1240,15 +1079,12 @@ impl AssignStaff {
         frame.render_widget(help_paragraph, layout[4]);
     }
 
-    /// Renders the shift selection screen with arrow-based navigation.
     fn render_shift_selection(&self, frame: &mut Frame) {
         let area = frame.area();
 
-        // Add a subtle background pattern
         let background = Block::default().style(Style::default().bg(Color::Rgb(16, 16, 28)));
         frame.render_widget(background, area);
 
-        // Create a very subtle pattern using direct buffer access
         for y in (0..area.height).step_by(4) {
             for x in (0..area.width).step_by(8) {
                 if (x + y) % 8 == 0 {
@@ -1260,19 +1096,17 @@ impl AssignStaff {
             }
         }
 
-        // Main layout with padding
         let layout = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(3), // Header
-                Constraint::Min(10),   // Shift options
-                Constraint::Length(1), // Message area
-                Constraint::Length(2), // Help text
+                Constraint::Length(3),
+                Constraint::Min(10),
+                Constraint::Length(1),
+                Constraint::Length(2),
             ])
-            .margin(2) // Add more padding on all sides
+            .margin(2)
             .split(area);
 
-        // Header
         let header_block = Block::default()
             .borders(Borders::BOTTOM)
             .border_style(Style::default().fg(Color::Rgb(75, 75, 120)))
@@ -1289,7 +1123,6 @@ impl AssignStaff {
             .alignment(Alignment::Center);
         frame.render_widget(title, layout[0]);
 
-        // Display staff and date info
         let info_text =
             if let (Some(staff), Some(date)) = (&self.selected_staff, &self.selected_date) {
                 let date_str = date
@@ -1301,7 +1134,6 @@ impl AssignStaff {
                 "Select a shift".to_string()
             };
 
-        // Create list area with a block
         let list_block = Block::default()
             .borders(Borders::ALL)
             .border_type(BorderType::Rounded)
@@ -1317,13 +1149,9 @@ impl AssignStaff {
         let inner_area = list_block.inner(layout[1]);
         frame.render_widget(list_block, layout[1]);
 
-        // Add header inside the block (with proper padding)
         let header_layout = Layout::default()
             .direction(Direction::Vertical)
-            .constraints([
-                Constraint::Length(1), // Header
-                Constraint::Min(1),    // List items
-            ])
+            .constraints([Constraint::Length(1), Constraint::Min(1)])
             .margin(1)
             .split(inner_area);
 
@@ -1350,7 +1178,6 @@ impl AssignStaff {
 
         frame.render_widget(header_table, header_layout[0]);
 
-        // Shift items with icons
         let shift_items = [
             ("🌅 Morning", "6am - 2pm"),
             ("🌇 Afternoon", "2pm - 10pm"),
@@ -1358,24 +1185,22 @@ impl AssignStaff {
         ]
         .iter()
         .map(|(shift, time)| {
-            // Apply color based on shift type
             let shift_color = match *shift {
-                "🌅 Morning" => Color::Rgb(230, 180, 80), // Sunrise yellow
-                "🌇 Afternoon" => Color::Rgb(230, 120, 80), // Sunset orange
-                "🌃 Night" => Color::Rgb(100, 130, 200),  // Night blue
-                _ => Color::Rgb(220, 220, 240),           // Default
+                "🌅 Morning" => Color::Rgb(230, 180, 80),
+                "🌇 Afternoon" => Color::Rgb(230, 120, 80),
+                "🌃 Night" => Color::Rgb(100, 130, 200),
+                _ => Color::Rgb(220, 220, 240),
             };
 
             ListItem::new(Line::from(vec![
                 Span::styled(format!("{:<18}", shift), Style::default().fg(shift_color)),
-                Span::raw("│ "), // Add divider between columns
+                Span::raw("│ "),
                 Span::raw(time.to_string()),
             ]))
             .style(Style::default().fg(Color::Rgb(220, 220, 240)))
         })
         .collect::<Vec<ListItem>>();
 
-        // Clone the list state for rendering
         let mut list_state_copy = self.shift_list_state.clone();
 
         let list = List::new(shift_items)
@@ -1389,7 +1214,6 @@ impl AssignStaff {
 
         frame.render_stateful_widget(list, header_layout[1], &mut list_state_copy);
 
-        // Display error/success message
         if let Some(error) = &self.error_message {
             let error_paragraph = Paragraph::new(error.as_str())
                 .style(
@@ -1410,7 +1234,6 @@ impl AssignStaff {
             frame.render_widget(success_paragraph, layout[2]);
         }
 
-        // Help text
         let help_text = "↑/↓: Navigate | Enter: Select shift | Esc: Back";
         let help_paragraph = Paragraph::new(help_text)
             .style(Style::default().fg(Color::Rgb(180, 180, 200)))
@@ -1418,15 +1241,12 @@ impl AssignStaff {
         frame.render_widget(help_paragraph, layout[3]);
     }
 
-    /// Renders the assigned shifts view for a staff member.
     fn render_assigned_shifts(&self, frame: &mut Frame) {
         let area = frame.area();
 
-        // Add a subtle background pattern
         let background = Block::default().style(Style::default().bg(Color::Rgb(16, 16, 28)));
         frame.render_widget(background, area);
 
-        // Create a very subtle pattern using direct buffer access
         for y in (0..area.height).step_by(4) {
             for x in (0..area.width).step_by(8) {
                 if (x + y) % 8 == 0 {
@@ -1438,19 +1258,17 @@ impl AssignStaff {
             }
         }
 
-        // Main layout
         let layout = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(3), // Header
-                Constraint::Min(10),   // Assignments table
-                Constraint::Length(1), // Message area
-                Constraint::Length(2), // Help text
+                Constraint::Length(3),
+                Constraint::Min(10),
+                Constraint::Length(1),
+                Constraint::Length(2),
             ])
             .margin(2)
             .split(area);
 
-        // Header
         let header_block = Block::default()
             .borders(Borders::BOTTOM)
             .border_style(Style::default().fg(Color::Rgb(75, 75, 120)))
@@ -1481,7 +1299,6 @@ impl AssignStaff {
         };
         frame.render_widget(title, layout[0]);
 
-        // Table for assignments
         if let Some(_staff) = &self.selected_staff {
             let table_block = Block::default()
                 .borders(Borders::ALL)
@@ -1499,7 +1316,6 @@ impl AssignStaff {
                 .bg(Color::Rgb(26, 26, 36))
                 .fg(Color::Rgb(220, 220, 240));
 
-            // Create table rows with enhanced formatting
             let rows = if self.staff_assignments.is_empty() {
                 vec![Row::new(vec![
                     Cell::from(""),
@@ -1537,11 +1353,7 @@ impl AssignStaff {
                                 "🌃 Night",
                                 "10pm - 6am",
                             ),
-                            _ => (
-                                normal_style,
-                                shift.as_ref(), // Fix: use as_ref() instead of as_str()
-                                "",
-                            ),
+                            _ => (normal_style, shift.as_ref(), ""),
                         };
 
                         Row::new(vec![
@@ -1556,9 +1368,9 @@ impl AssignStaff {
             let table = Table::new(
                 rows,
                 [
-                    Constraint::Length(16), // Date
-                    Constraint::Length(14), // Shift
-                    Constraint::Min(10),    // Time
+                    Constraint::Length(16),
+                    Constraint::Length(14),
+                    Constraint::Min(10),
                 ],
             )
             .header(
@@ -1578,7 +1390,6 @@ impl AssignStaff {
 
             frame.render_widget(table, layout[1]);
         } else {
-            // No staff selected
             let message = Paragraph::new("No staff member selected")
                 .style(Style::default().fg(Color::Rgb(180, 180, 200)))
                 .alignment(Alignment::Center)
@@ -1591,7 +1402,6 @@ impl AssignStaff {
             frame.render_widget(message, layout[1]);
         }
 
-        // Display error message if any
         if let Some(error) = &self.error_message {
             let error_paragraph = Paragraph::new(error.as_str())
                 .style(
@@ -1603,7 +1413,6 @@ impl AssignStaff {
             frame.render_widget(error_paragraph, layout[2]);
         }
 
-        // Help text
         let help_text = "Esc: Back to staff selection";
         let help_paragraph = Paragraph::new(help_text)
             .style(Style::default().fg(Color::Rgb(180, 180, 200)))
@@ -1611,11 +1420,10 @@ impl AssignStaff {
         frame.render_widget(help_paragraph, layout[3]);
     }
 
-    /// Renders the confirmation dialog.
     fn render_confirmation_dialog(&self, frame: &mut Frame) {
         let area = frame.area();
         let dialog_width = 50;
-        let dialog_height = 8; // Corrected height
+        let dialog_height = 8;
 
         let dialog_area = Rect::new(
             (area.width.saturating_sub(dialog_width)) / 2,
@@ -1640,24 +1448,19 @@ impl AssignStaff {
 
         frame.render_widget(dialog_block.clone(), dialog_area);
 
-        // Dialog content layout
         let inner_area = dialog_block.inner(dialog_area);
         let content_layout = Layout::default()
             .direction(Direction::Vertical)
             .margin(1)
-            .constraints([
-                Constraint::Length(4), //  Height for message
-                Constraint::Length(2), //  Yes/No buttons
-            ])
+            .constraints([Constraint::Length(4), Constraint::Length(2)])
             .spacing(1)
             .split(inner_area);
 
-        // Confirmation message with details
         let staff_name = self
             .selected_staff
             .as_ref()
             .map(|s| s.name.clone())
-            .unwrap_or_else(|| "Unknown".to_string()); // Use unwrap_or_else for consistency
+            .unwrap_or_else(|| "Unknown".to_string());
 
         let date_str = self
             .selected_date
@@ -1665,7 +1468,7 @@ impl AssignStaff {
                 d.format(&format_description!("[year]-[month]-[day]"))
                     .unwrap_or_else(|_| "Unknown".to_string())
             })
-            .unwrap_or_else(|| "Unknown".to_string()); // Use unwrap_or_else
+            .unwrap_or_else(|| "Unknown".to_string());
 
         let (shift_str, shift_time) = match self.selected_shift {
             Some(Shift::Morning) => ("🌅 Morning", "6am - 2pm"),
@@ -1675,7 +1478,6 @@ impl AssignStaff {
         };
 
         let message_text = format!(
-            // Removed extra newline, more concise
             "Assign {} ({}) shift to {} on {}?",
             shift_str, shift_time, staff_name, date_str
         );
@@ -1683,41 +1485,38 @@ impl AssignStaff {
         let message = Paragraph::new(message_text)
             .style(Style::default().fg(Color::Rgb(220, 220, 240)))
             .alignment(Alignment::Center)
-            .wrap(Wrap { trim: true }); // Ensure wrapping
+            .wrap(Wrap { trim: true });
         frame.render_widget(message, content_layout[0]);
 
-        // Yes/No buttons with styling (like delete.rs and update.rs)
         let buttons_layout = Layout::default()
             .direction(Direction::Horizontal)
             .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
             .split(content_layout[1]);
 
-        // Determine button styles based on selection
         let yes_style = if self.confirmation_selected == 0 {
             Style::default()
-                .fg(Color::Rgb(140, 219, 140)) // Green for selected "Yes"
+                .fg(Color::Rgb(140, 219, 140))
                 .add_modifier(Modifier::BOLD)
         } else {
-            Style::default().fg(Color::Rgb(180, 180, 200)) // Default color
+            Style::default().fg(Color::Rgb(180, 180, 200))
         };
 
         let no_style = if self.confirmation_selected == 1 {
             Style::default()
-                .fg(Color::Rgb(255, 100, 100)) // Red for selected "No"
+                .fg(Color::Rgb(255, 100, 100))
                 .add_modifier(Modifier::BOLD)
         } else {
-            Style::default().fg(Color::Rgb(180, 180, 200)) // Default color
+            Style::default().fg(Color::Rgb(180, 180, 200))
         };
 
-        // Button text with selection indicator
         let yes_text = if self.confirmation_selected == 0 {
-            "► Yes ◄" // Highlighted "Yes"
+            "► Yes ◄"
         } else {
             "  Yes  "
         };
 
         let no_text = if self.confirmation_selected == 1 {
-            "► No ◄" // Highlighted "No"
+            "► No ◄"
         } else {
             "  No  "
         };

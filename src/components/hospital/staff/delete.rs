@@ -1,12 +1,3 @@
-//! Delete Staff component for the Hospital application.
-//!
-//! Provides a UI for selecting and deleting staff members. Features:
-//! - Viewing all staff in a tabular format
-//! - Searching staff by various criteria
-//! - Selecting individual or multiple staff for deletion
-//! - Bulk deletion with confirmation
-//! - Feedback on successful or failed operations
-
 use crate::app::SelectedApp;
 use crate::components::Component;
 use crate::db;
@@ -20,16 +11,15 @@ use ratatui::{
 };
 use std::time::{Duration, Instant};
 
-/// Component to delete staff members.
 pub struct DeleteStaff {
-    staff: Vec<StaffMember>,          // All staff
-    filtered_staff: Vec<StaffMember>, // Filtered staff
-    selected_staff_ids: Vec<i64>,     // IDs of selected staff
-    search_input: String,             // Search input
-    is_searching: bool,               // Search mode flag
-    table_state: TableState,          // Table state
-    show_confirmation: bool,          // Confirmation dialog flag
-    confirmation_selected: usize,     // Confirmation dialog selection
+    staff: Vec<StaffMember>,
+    filtered_staff: Vec<StaffMember>,
+    selected_staff_ids: Vec<i64>,
+    search_input: String,
+    is_searching: bool,
+    table_state: TableState,
+    show_confirmation: bool,
+    confirmation_selected: usize,
     error_message: Option<String>,
     error_timer: Option<Instant>,
     success_message: Option<String>,
@@ -37,17 +27,16 @@ pub struct DeleteStaff {
 }
 
 impl DeleteStaff {
-    /// Creates a new `DeleteStaff` component.
     pub fn new() -> Self {
         Self {
-            staff: Vec::new(),              // Initialize as empty
-            filtered_staff: Vec::new(),     // Initialize as empty
-            selected_staff_ids: Vec::new(), // Stores IDs, not bools
+            staff: Vec::new(),
+            filtered_staff: Vec::new(),
+            selected_staff_ids: Vec::new(),
             search_input: String::new(),
             is_searching: false,
-            table_state: TableState::default(), // No initial selection
+            table_state: TableState::default(),
             show_confirmation: false,
-            confirmation_selected: 1, // Default to "No"
+            confirmation_selected: 1,
             error_message: None,
             error_timer: None,
             success_message: None,
@@ -55,21 +44,19 @@ impl DeleteStaff {
         }
     }
 
-    /// Fetches all staff from the database and updates the component's state.
     pub fn fetch_staff(&mut self) -> Result<()> {
         self.staff = db::get_all_staff()?;
-        self.filter_staff(); // Apply any filtering
+        self.filter_staff();
 
         if !self.filtered_staff.is_empty() {
-            self.table_state.select(Some(0)); // Select first if available
+            self.table_state.select(Some(0));
         } else {
-            self.table_state.select(None); // None if no staff
+            self.table_state.select(None);
         }
 
         Ok(())
     }
 
-    /// Filters the staff list based on the search input.
     fn filter_staff(&mut self) {
         if self.search_input.is_empty() {
             self.filtered_staff = self.staff.clone();
@@ -88,7 +75,6 @@ impl DeleteStaff {
                 .collect();
         }
 
-        // Clear selections and repopulate selected_staff_ids based on filtered staff
         self.selected_staff_ids.clear();
         if let Some(selected) = self.table_state.selected() {
             if selected >= self.filtered_staff.len() && !self.filtered_staff.is_empty() {
@@ -99,11 +85,9 @@ impl DeleteStaff {
         }
     }
 
-    /// Handles user input events.
     fn handle_input(&mut self, key: KeyEvent) -> Result<Option<SelectedApp>> {
         self.check_timeouts();
 
-        // Handle confirmation dialog if it's showing
         if self.show_confirmation {
             match key.code {
                 KeyCode::Left | KeyCode::Right => {
@@ -111,21 +95,19 @@ impl DeleteStaff {
                 }
                 KeyCode::Enter => {
                     if self.confirmation_selected == 0 {
-                        // Yes - delete selected staff
                         let mut deleted_count = 0;
                         let mut error_occurred = false;
 
-                        // Delete selected staff by ID
                         for staff_id in &self.selected_staff_ids {
                             match db::delete_staff_member(*staff_id) {
                                 Ok(_) => deleted_count += 1,
                                 Err(_) => {
                                     error_occurred = true;
-                                    break; // Stop on first error
+                                    break;
                                 }
                             }
                         }
-                        self.selected_staff_ids.clear(); // Clear selections
+                        self.selected_staff_ids.clear();
 
                         if error_occurred {
                             self.set_error(format!(
@@ -143,10 +125,9 @@ impl DeleteStaff {
                             self.set_error("No staff were selected for deletion.".to_string());
                         }
 
-                        // Refresh staff list
                         if let Ok(staff) = db::get_all_staff() {
                             self.staff = staff;
-                            self.filter_staff(); // Re-apply search filter
+                            self.filter_staff();
 
                             if self.filtered_staff.is_empty() {
                                 self.table_state.select(None);
@@ -160,7 +141,6 @@ impl DeleteStaff {
 
                         self.show_confirmation = false;
                     } else {
-                        // No
                         self.show_confirmation = false;
                     }
                 }
@@ -169,9 +149,7 @@ impl DeleteStaff {
                 }
                 _ => {}
             }
-        }
-        // Handle search input if in search mode
-        else if self.is_searching {
+        } else if self.is_searching {
             match key.code {
                 KeyCode::Char(c) => {
                     self.search_input.push(c);
@@ -192,12 +170,9 @@ impl DeleteStaff {
                 }
                 _ => {}
             }
-        }
-        // Handle normal navigation
-        else {
+        } else {
             match key.code {
                 KeyCode::Char('/') | KeyCode::Char('s') | KeyCode::Char('S') => {
-                    // Activate search mode
                     self.is_searching = true;
                     return Ok(None);
                 }
@@ -232,7 +207,6 @@ impl DeleteStaff {
                     }
                 }
                 KeyCode::Char(' ') => {
-                    // Toggle selection
                     if let Some(selected) = self.table_state.selected() {
                         if selected < self.filtered_staff.len() {
                             let staff_id = self.filtered_staff[selected].id;
@@ -241,53 +215,46 @@ impl DeleteStaff {
                                 .iter()
                                 .position(|&id| id == staff_id)
                             {
-                                self.selected_staff_ids.remove(index); // Deselect
+                                self.selected_staff_ids.remove(index);
                             } else {
-                                self.selected_staff_ids.push(staff_id); // Select
+                                self.selected_staff_ids.push(staff_id);
                             }
                         }
                     }
                 }
                 KeyCode::Char('b') => {
-                    // Bulk delete - show confirmation if any staff are selected
                     if !self.selected_staff_ids.is_empty() {
                         self.show_confirmation = true;
-                        self.confirmation_selected = 1; // Default to "No"
+                        self.confirmation_selected = 1;
                     } else {
                         self.set_error("No staff selected for deletion.".to_string());
                     }
                 }
                 KeyCode::Enter => {
-                    // Single delete - add current staff to selected_staff_ids and show confirmation
                     if let Some(selected) = self.table_state.selected() {
                         if selected < self.filtered_staff.len() {
                             let staff_id = self.filtered_staff[selected].id;
                             self.selected_staff_ids.push(staff_id);
                             self.show_confirmation = true;
-                            self.confirmation_selected = 1; // Default to "No"
+                            self.confirmation_selected = 1;
                         }
                     }
                 }
                 KeyCode::Char('a') => {
-                    // Select/deselect all
                     if self.selected_staff_ids.len() == self.filtered_staff.len() {
-                        // All are selected, deselect all
                         self.selected_staff_ids.clear();
                     } else {
-                        // Select all
                         self.selected_staff_ids =
                             self.filtered_staff.iter().map(|s| s.id).collect();
                     }
                 }
                 KeyCode::Char('r') | KeyCode::Char('R') => {
-                    // Refresh staff list
                     if let Ok(staff) = db::get_all_staff() {
                         self.staff = staff;
-                        self.filter_staff(); // Re-apply search filter
+                        self.filter_staff();
                     }
                 }
                 KeyCode::Esc => {
-                    // Go back to the main menu
                     return Ok(Some(SelectedApp::None));
                 }
                 _ => {}
@@ -296,25 +263,21 @@ impl DeleteStaff {
         Ok(None)
     }
 
-    /// Clears the error message and timer.
     fn clear_error(&mut self) {
         self.error_message = None;
         self.error_timer = None;
     }
 
-    /// Sets an error message and starts the display timer.
     fn set_error(&mut self, message: String) {
         self.error_message = Some(message);
         self.error_timer = Some(Instant::now());
     }
 
-    /// Clears the success message and timer.
     fn clear_success(&mut self) {
         self.success_message = None;
         self.success_timer = None;
     }
 
-    /// Checks if the success message has been displayed long enough.
     fn check_success_timeout(&mut self) {
         if let Some(timer) = self.success_timer {
             if timer.elapsed() > Duration::from_secs(5) {
@@ -323,7 +286,6 @@ impl DeleteStaff {
         }
     }
 
-    /// Checks if the error message has been displayed long enough
     fn check_error_timeout(&mut self) {
         if let Some(timer) = self.error_timer {
             if timer.elapsed() > Duration::from_secs(5) {
@@ -332,7 +294,6 @@ impl DeleteStaff {
         }
     }
 
-    /// Checks both error and success message timeouts.
     fn check_timeouts(&mut self) {
         self.check_error_timeout();
         self.check_success_timeout();
@@ -357,20 +318,18 @@ impl Component for DeleteStaff {
             area,
         );
 
-        // Main layout with help text at bottom
         let layout = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(3), // Header
-                Constraint::Length(3), // Search input
-                Constraint::Min(5),    // Table
-                Constraint::Length(2), // Message area
-                Constraint::Length(3), // Help text (moved to bottom)
+                Constraint::Length(3),
+                Constraint::Length(3),
+                Constraint::Min(5),
+                Constraint::Length(2),
+                Constraint::Length(3),
             ])
             .margin(1)
             .split(area);
 
-        // Render header
         let header_block = Block::default()
             .borders(Borders::BOTTOM)
             .border_style(Style::default().fg(Color::Rgb(75, 75, 120)))
@@ -387,7 +346,6 @@ impl Component for DeleteStaff {
             .alignment(Alignment::Center);
         frame.render_widget(title, layout[0]);
 
-        // Search input field
         let search_block = Block::default()
             .borders(Borders::ALL)
             .border_type(BorderType::Rounded)
@@ -413,7 +371,6 @@ impl Component for DeleteStaff {
             .block(search_block);
         frame.render_widget(search_paragraph, layout[1]);
 
-        // Staff table with checkboxes
         let table_block = Block::default()
             .borders(Borders::ALL)
             .border_type(BorderType::Rounded)
@@ -442,7 +399,6 @@ impl Component for DeleteStaff {
             .bg(Color::Rgb(26, 26, 36))
             .fg(Color::Rgb(220, 220, 240));
 
-        // Create table rows - now using filtered_staff
         let mut rows = Vec::new();
         for staff_member in &self.filtered_staff {
             let checkbox = if self.selected_staff_ids.contains(&staff_member.id) {
@@ -487,12 +443,12 @@ impl Component for DeleteStaff {
         let table = Table::new(
             rows,
             [
-                Constraint::Length(5),  // Checkbox
-                Constraint::Length(8),  // ID
-                Constraint::Length(20), // Name
-                Constraint::Length(12), // Role
-                Constraint::Length(15), // Phone Number
-                Constraint::Min(20),    // Address
+                Constraint::Length(5),
+                Constraint::Length(8),
+                Constraint::Length(20),
+                Constraint::Length(12),
+                Constraint::Length(15),
+                Constraint::Min(20),
             ],
         )
         .header(
@@ -515,11 +471,9 @@ impl Component for DeleteStaff {
         .row_highlight_style(selected_style)
         .highlight_symbol("► ");
 
-        // Pass a mutable reference to the actual table_state, not a clone.
         let mut table_state = self.table_state.clone();
         frame.render_stateful_widget(table, layout[2], &mut table_state);
 
-        // Display success or error message
         if let Some(success) = &self.success_message {
             let success_paragraph = Paragraph::new(success.as_str())
                 .style(
@@ -540,7 +494,6 @@ impl Component for DeleteStaff {
             frame.render_widget(error_paragraph, layout[3]);
         }
 
-        // Help text at bottom
         if self.is_searching {
             let help_text =
                 Paragraph::new("Type to search | ↓/Enter: To results | Esc: Cancel search")
@@ -548,7 +501,6 @@ impl Component for DeleteStaff {
                     .alignment(Alignment::Center);
             frame.render_widget(help_text, layout[4]);
         } else {
-            // Split help text
             let help_block = Block::default()
                 .border_style(Style::default().fg(Color::Rgb(75, 75, 120)))
                 .style(Style::default().bg(Color::Rgb(16, 16, 28)));
@@ -571,7 +523,6 @@ impl Component for DeleteStaff {
             frame.render_widget(help_text2, help_layout[1]);
         }
 
-        // Confirmation dialog (overlay)
         if self.show_confirmation {
             let dialog_width = 50;
             let dialog_height = 8;
@@ -582,7 +533,6 @@ impl Component for DeleteStaff {
                 dialog_height,
             );
 
-            // Clear the dialog area
             frame.render_widget(Clear, dialog_area);
 
             let selected_count = self.selected_staff_ids.len();

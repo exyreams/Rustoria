@@ -1,9 +1,3 @@
-//! `DeleteRecord` module for the Hospital application.
-//!
-//! This module provides the `DeleteRecord` component, which allows users to view, filter, select, and delete medical records from the database.
-//! It integrates with the database for record retrieval and deletion, and presents a TUI (Text User Interface) for user interaction,
-//! including search functionality and confirmation dialogs. The primary type exposed is `DeleteRecord`.
-
 use crate::app::SelectedApp;
 use crate::components::Component;
 use crate::db;
@@ -18,40 +12,23 @@ use ratatui::{
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
-/// A component for managing the deletion of medical records in the hospital application.
-///
-/// This struct encapsulates the state and logic required to display a list of medical records,
-/// allow users to select records for deletion, search and filter records based on user input,
-/// and provide a confirmation dialog before performing the deletion. It interacts with the
-/// database to fetch and delete records.  The component's lifecycle involves fetching records,
-/// displaying them in a table, handling user input for selection and search, and managing
-/// a confirmation dialog.
 pub struct DeleteRecord {
-    records: Vec<MedicalRecord>,          // All records
-    filtered_records: Vec<MedicalRecord>, // Filtered records
-    patients: HashMap<i64, Patient>,      // Map of patient ID to patient info
-    selected_record_ids: Vec<i64>,        // IDs of selected records
-    search_input: String,                 // Search input
-    is_searching: bool,                   // Search mode flag
-    table_state: TableState,              // Table state
-    show_confirmation: bool,              // Confirmation dialog flag
-    confirmation_selected: usize,         // Confirmation dialog selection
-    error_message: Option<String>,        // Error message
-    error_timer: Option<Instant>,         // Error timer
-    success_message: Option<String>,      // Success message
-    success_timer: Option<Instant>,       // Success timer
+    records: Vec<MedicalRecord>,
+    filtered_records: Vec<MedicalRecord>,
+    patients: HashMap<i64, Patient>,
+    selected_record_ids: Vec<i64>,
+    search_input: String,
+    is_searching: bool,
+    table_state: TableState,
+    show_confirmation: bool,
+    confirmation_selected: usize,
+    error_message: Option<String>,
+    error_timer: Option<Instant>,
+    success_message: Option<String>,
+    success_timer: Option<Instant>,
 }
 
 impl DeleteRecord {
-    /// Creates a new `DeleteRecord` component.
-    ///
-    /// This function initializes a new instance of the `DeleteRecord` component with default values.
-    /// It sets up empty vectors for records and filtered records, clears the search input,
-    /// initializes the table state, and sets the confirmation dialog flag to false.
-    ///
-    /// # Returns
-    ///
-    /// A new `DeleteRecord` instance.
     pub fn new() -> Self {
         Self {
             records: Vec::new(),
@@ -62,7 +39,7 @@ impl DeleteRecord {
             is_searching: false,
             table_state: TableState::default(),
             show_confirmation: false,
-            confirmation_selected: 1, // Default to "No"
+            confirmation_selected: 1,
             error_message: None,
             error_timer: None,
             success_message: None,
@@ -70,16 +47,6 @@ impl DeleteRecord {
         }
     }
 
-    /// Fetches all medical records from the database and filters them.
-    ///
-    /// This method retrieves all medical records from the database using `db::get_all_medical_records()`.
-    /// After successfully fetching the records, it calls `filter_records()` to apply any existing search
-    /// filters. The table's selection state is then updated based on the presence of records.
-    ///
-    /// # Errors
-    ///
-    /// Returns an `anyhow::Result` which will be an error if there is a problem retrieving records
-    /// from the database.
     pub fn fetch_records(&mut self) -> Result<()> {
         self.records = db::get_all_medical_records()?;
         self.fetch_patients_data()?;
@@ -94,13 +61,6 @@ impl DeleteRecord {
         Ok(())
     }
 
-    /// Filters the medical records based on the current search input.
-    ///
-    /// This function filters the `records` field, populating the `filtered_records` field with the
-    /// records that match the current `search_input`. If the search input is empty, all records are
-    /// considered a match. The search is case-insensitive, and filters are applied to patient ID,
-    /// doctor notes, and diagnosis fields of the `MedicalRecord` struct. It also updates the selection
-    /// state of the table to prevent out-of-bounds selection, clearing it if the filtered list is empty.
     fn filter_records(&mut self) {
         if self.search_input.is_empty() {
             self.filtered_records = self.records.clone();
@@ -110,7 +70,6 @@ impl DeleteRecord {
                 .records
                 .iter()
                 .filter(|r| {
-                    // Check if patient name matches search term
                     let patient_name_match = if let Some(patient) = self.patients.get(&r.patient_id)
                     {
                         patient.first_name.to_lowercase().contains(&search_term)
@@ -128,36 +87,23 @@ impl DeleteRecord {
                 .collect();
         }
 
-        // Update selection state
         self.selected_record_ids.clear();
 
         let num_filtered = self.filtered_records.len();
         if num_filtered == 0 {
-            self.table_state.select(None); // No records, clear selection
+            self.table_state.select(None);
         } else {
-            // If there are records, make sure the selected index is valid
-            let selected = self.table_state.selected().unwrap_or(0); // Default to 0 if nothing is selected
+            let selected = self.table_state.selected().unwrap_or(0);
             self.table_state
                 .select(Some(selected.min(num_filtered - 1)));
         }
     }
 
-    /// Fetches patient data for all patient IDs in the records.
-    ///
-    /// This method retrieves patient information for all patient IDs in the records and
-    /// stores it in the patients HashMap for quick lookup.
-    ///
-    /// # Errors
-    ///
-    /// Returns an `anyhow::Result` which will contain an error if the database query fails.
     fn fetch_patients_data(&mut self) -> Result<()> {
-        // Clear existing patients
         self.patients.clear();
 
-        // Get all patients from database
         match db::get_all_patients() {
             Ok(all_patients) => {
-                // Create map of patient ID to patient data
                 for patient in all_patients {
                     self.patients.insert(patient.id, patient);
                 }
@@ -165,43 +111,15 @@ impl DeleteRecord {
             }
             Err(e) => {
                 self.set_error(format!("Failed to fetch patient data: {}", e));
-                Ok(()) // Continue program but with error message
+                Ok(())
             }
         }
     }
 
-    /// Returns the patient information for a given patient ID.
-    ///
-    /// This function retrieves the patient information for the specified patient ID from the `patients` HashMap.
-    ///
-    /// # Parameters
-    ///
-    /// - `patient_id`: The ID of the patient to retrieve information for.
-    ///
-    /// # Returns
-    ///
-    /// - `Some(&Patient)` if the patient information exists.
-    /// - `None` if the patient information does not exist.
     fn get_patient(&self, patient_id: i64) -> Option<&Patient> {
         self.patients.get(&patient_id)
     }
 
-    /// Handles key input events to manage the component's behavior.
-    ///
-    /// This method processes keyboard input, handling actions like searching, record selection,
-    /// deletion confirmation, and navigation. It manages different states of the component
-    /// including searching and confirmation dialogs.  It also interacts with the database to
-    /// perform record deletion based on user confirmation and displays success or error
-    /// messages to the user.
-    ///
-    /// # Arguments
-    ///
-    /// * `key`: A `KeyEvent` representing the user's keyboard input.
-    ///
-    /// # Returns
-    ///
-    /// Returns a `Result<Option<SelectedApp>>`.  `Some(SelectedApp::None)` is returned to
-    /// indicate that no specific app selection change is needed.
     fn handle_input(&mut self, key: KeyEvent) -> Result<Option<SelectedApp>> {
         self.check_timeouts();
 
@@ -212,9 +130,7 @@ impl DeleteRecord {
                 }
                 KeyCode::Enter => {
                     if self.confirmation_selected == 0 {
-                        // Yes, proceed with deletion
                         if self.selected_record_ids.is_empty() {
-                            // This should never happen, but handle it gracefully
                             self.set_error("No records were selected for deletion.".to_string());
                         } else {
                             let mut deleted_count = 0;
@@ -225,7 +141,7 @@ impl DeleteRecord {
                                     Ok(_) => deleted_count += 1,
                                     Err(_) => {
                                         error_occurred = true;
-                                        break; // Stop on first error
+                                        break;
                                     }
                                 }
                             }
@@ -245,17 +161,14 @@ impl DeleteRecord {
                                 self.success_timer = Some(Instant::now());
                             }
 
-                            // Refresh records after deletion
                             self.fetch_records()?;
                         }
                         self.show_confirmation = false;
                     } else {
-                        // No, cancel deletion
                         self.show_confirmation = false;
                     }
                 }
                 KeyCode::Esc => {
-                    // Cancel confirmation
                     self.show_confirmation = false;
                 }
                 _ => {}
@@ -318,7 +231,6 @@ impl DeleteRecord {
                     }
                 }
                 KeyCode::Char(' ') => {
-                    // Toggle selection
                     if let Some(selected) = self.table_state.selected() {
                         if selected < self.filtered_records.len() {
                             let record_id = self.filtered_records[selected].id;
@@ -335,10 +247,9 @@ impl DeleteRecord {
                     }
                 }
                 KeyCode::Enter => {
-                    // Show confirmation if records are selected.  Error if not.
                     if !self.selected_record_ids.is_empty() {
                         self.show_confirmation = true;
-                        self.confirmation_selected = 1; // Default to "No"
+                        self.confirmation_selected = 1;
                     } else {
                         self.set_error(
                             "Please select record(s) to delete using the spacebar.".to_string(),
@@ -346,10 +257,9 @@ impl DeleteRecord {
                     }
                 }
                 KeyCode::Char('b') => {
-                    // Bulk delete (requires selection, show error if none)
                     if !self.selected_record_ids.is_empty() {
                         self.show_confirmation = true;
-                        self.confirmation_selected = 1; // Default to "No"
+                        self.confirmation_selected = 1;
                     } else {
                         self.set_error(
                             "Please select record(s) to delete using the spacebar.".to_string(),
@@ -357,7 +267,6 @@ impl DeleteRecord {
                     }
                 }
                 KeyCode::Char('a') => {
-                    // Select/deselect all
                     if self.selected_record_ids.len() == self.filtered_records.len() {
                         self.selected_record_ids.clear();
                     } else {
@@ -366,7 +275,6 @@ impl DeleteRecord {
                     }
                 }
                 KeyCode::Char('r') | KeyCode::Char('R') => {
-                    // Refresh records
                     self.fetch_records()?;
                 }
                 KeyCode::Esc => {
@@ -378,45 +286,21 @@ impl DeleteRecord {
         Ok(None)
     }
 
-    /// Clears the current error message and resets the error timer.
-    ///
-    /// This method is called to remove any existing error message from the display and reset the
-    /// associated timer. This is typically done after the error has been displayed for a certain
-    /// duration.
     fn clear_error(&mut self) {
         self.error_message = None;
         self.error_timer = None;
     }
 
-    /// Sets an error message and starts the error display timer.
-    ///
-    /// This function sets the `error_message` field to the provided `message` and initializes
-    /// the `error_timer` with the current instant. This is used to display an error to the user
-    /// and automatically clear it after a predefined time.
-    ///
-    /// # Arguments
-    ///
-    /// * `message`: A `String` containing the error message to be displayed.
     fn set_error(&mut self, message: String) {
         self.error_message = Some(message);
         self.error_timer = Some(Instant::now());
     }
 
-    /// Clears the success message and resets the success timer.
-    ///
-    /// This function clears the currently displayed success message and resets the associated timer.
-    /// This is typically called after a successful operation, and the message should be removed from
-    /// display after a certain period.
     fn clear_success(&mut self) {
         self.success_message = None;
         self.success_timer = None;
     }
 
-    /// Checks if the success message timeout has elapsed and clears the message if it has.
-    ///
-    /// This method checks the `success_timer` to determine if the success message should be cleared.
-    /// If the timer is active and the elapsed time exceeds 5 seconds, it calls `clear_success()`
-    /// to remove the success message from display.
     fn check_success_timeout(&mut self) {
         if let Some(timer) = self.success_timer {
             if timer.elapsed() > Duration::from_secs(5) {
@@ -425,11 +309,6 @@ impl DeleteRecord {
         }
     }
 
-    /// Checks if the error message timeout has elapsed and clears the message if it has.
-    ///
-    /// This method checks the `error_timer` to determine if the error message should be cleared.
-    /// If the timer is active and the elapsed time exceeds 5 seconds, it calls `clear_error()`
-    /// to remove the error message from display.
     fn check_error_timeout(&mut self) {
         if let Some(timer) = self.error_timer {
             if timer.elapsed() > Duration::from_secs(5) {
@@ -438,10 +317,6 @@ impl DeleteRecord {
         }
     }
 
-    /// Checks the timeouts for both success and error messages.
-    ///
-    /// This method calls both `check_error_timeout()` and `check_success_timeout()` to manage
-    /// the display durations of both error and success messages.
     fn check_timeouts(&mut self) {
         self.check_error_timeout();
         self.check_success_timeout();
@@ -449,31 +324,16 @@ impl DeleteRecord {
 }
 
 impl Default for DeleteRecord {
-    /// Creates a new `DeleteRecord` component with default settings.
     fn default() -> Self {
         Self::new()
     }
 }
 
 impl Component for DeleteRecord {
-    /// Handles key input events and directs them to the component's internal handler.
-    ///
-    /// This function is part of the `Component` trait implementation. It receives a `KeyEvent` and
-    /// passes it to the `handle_input` method of the `DeleteRecord` struct. This allows the
-    /// component to react to user input.
     fn handle_input(&mut self, event: KeyEvent) -> Result<Option<SelectedApp>> {
         self.handle_input(event)
     }
 
-    /// Renders the `DeleteRecord` component to the terminal frame.
-    ///
-    /// This method is responsible for drawing the component's user interface. It constructs the
-    /// layout, including the header, search input, record table, success/error messages, and
-    /// confirmation dialog. The UI elements are styled and rendered using `ratatui` widgets.
-    ///
-    /// # Arguments
-    ///
-    /// * `frame`: A mutable reference to the `Frame` in which to render the component.
     fn render(&self, frame: &mut Frame) {
         let area = frame.area();
         frame.render_widget(
@@ -493,7 +353,6 @@ impl Component for DeleteRecord {
             .margin(1)
             .split(area);
 
-        // Header
         let header_block = Block::default()
             .borders(Borders::BOTTOM)
             .border_style(Style::default().fg(Color::Rgb(75, 75, 120)))
@@ -510,7 +369,6 @@ impl Component for DeleteRecord {
             .alignment(Alignment::Center);
         frame.render_widget(title, layout[0]);
 
-        // Search field
         let search_block = Block::default()
             .borders(Borders::ALL)
             .border_type(BorderType::Rounded)
@@ -536,7 +394,6 @@ impl Component for DeleteRecord {
             .block(search_block);
         frame.render_widget(search_paragraph, layout[1]);
 
-        // Record table
         let table_block = Block::default()
             .borders(Borders::ALL)
             .border_type(BorderType::Rounded)
@@ -573,7 +430,6 @@ impl Component for DeleteRecord {
                 "[ ]"
             };
 
-            // Get patient name from patients HashMap
             let (first_name, last_name) = match self.get_patient(record.patient_id) {
                 Some(patient) => (patient.first_name.clone(), patient.last_name.clone()),
                 None => ("Unknown".to_string(), "Patient".to_string()),
@@ -582,8 +438,8 @@ impl Component for DeleteRecord {
             rows.push(Row::new(vec![
                 Cell::from(checkbox).style(normal_style),
                 Cell::from(record.id.to_string()).style(normal_style),
-                Cell::from(first_name).style(normal_style), // First Name instead of patient_id
-                Cell::from(last_name).style(normal_style),  // Last Name as a new column
+                Cell::from(first_name).style(normal_style),
+                Cell::from(last_name).style(normal_style),
                 Cell::from(record.diagnosis.clone()).style(normal_style),
             ]));
         }
@@ -598,7 +454,7 @@ impl Component for DeleteRecord {
             rows.push(Row::new(vec![
                 Cell::from(""),
                 Cell::from(""),
-                Cell::from(""), // Additional empty cell for the new column
+                Cell::from(""),
                 Cell::from(message).style(Style::default().fg(Color::Rgb(180, 180, 200))),
                 Cell::from(""),
             ]));
@@ -607,11 +463,11 @@ impl Component for DeleteRecord {
         let table = Table::new(
             rows,
             [
-                Constraint::Length(5),  // Checkbox
-                Constraint::Length(8),  // ID
-                Constraint::Length(12), // First Name
-                Constraint::Length(12), // Last Name
-                Constraint::Min(20),    // Diagnosis
+                Constraint::Length(5),
+                Constraint::Length(8),
+                Constraint::Length(12),
+                Constraint::Length(12),
+                Constraint::Min(20),
             ],
         )
         .header(
@@ -635,7 +491,6 @@ impl Component for DeleteRecord {
 
         frame.render_stateful_widget(table, layout[2], &mut self.table_state.clone());
 
-        // Success or error message
         if let Some(success) = &self.success_message {
             let success_paragraph = Paragraph::new(success.as_str())
                 .style(
@@ -656,7 +511,6 @@ impl Component for DeleteRecord {
             frame.render_widget(error_paragraph, layout[3]);
         }
 
-        // Help text
         if self.is_searching {
             let help_text =
                 Paragraph::new("Type to search | ↓/Enter: To results | Esc: Cancel search")
@@ -686,7 +540,6 @@ impl Component for DeleteRecord {
             frame.render_widget(help_text2, help_layout[1]);
         }
 
-        // Confirmation dialog
         if self.show_confirmation {
             let dialog_width = 50;
             let dialog_height = 8;

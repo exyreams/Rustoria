@@ -1,5 +1,3 @@
-//! Add Patient component for the Hospital application.
-
 use crate::components::hospital::patients::PatientAction;
 use crate::components::Component;
 use crate::db;
@@ -17,26 +15,26 @@ pub struct AddPatient {
     gender: Gender,
     address: String,
     phone: String,
-    email: Option<String>,           // Optional
-    medical_history: Option<String>, // Optional
-    allergies: Option<String>,       // Optional
-    medications: Option<String>,     // Optional
-    focus_index: usize,              // Track which input field has focus
-    error_message: Option<String>,   // For displaying errors
-    error_timer: Option<Instant>,    // Timer for error message
-    success_message: Option<String>, // For displaying success message
-    success_timer: Option<Instant>,  // Timer for success message
+    email: Option<String>,
+    medical_history: Option<String>,
+    allergies: Option<String>,
+    medications: Option<String>,
+    focus_index: usize,
+    error_message: Option<String>,
+    error_timer: Option<Instant>,
+    success_message: Option<String>,
+    success_timer: Option<Instant>,
 }
 
-const INPUT_FIELDS: usize = 10; // Number of input fields + 1 for "Back"
+const INPUT_FIELDS: usize = 10;
 
 impl Default for AddPatient {
     fn default() -> Self {
         AddPatient {
             first_name: String::new(),
             last_name: String::new(),
-            dob: String::new(),   // Use a date type later
-            gender: Gender::Male, // Default, consider making this optional
+            dob: String::new(),
+            gender: Gender::Male,
             address: String::new(),
             phone: String::new(),
             email: None,
@@ -54,7 +52,7 @@ impl Default for AddPatient {
 
 impl AddPatient {
     pub fn new() -> Self {
-        Self::default() // Use Default to initialize
+        Self::default()
     }
 
     fn clear_error(&mut self) {
@@ -95,8 +93,8 @@ impl AddPatient {
     }
 
     pub fn handle_input(&mut self, key: KeyEvent) -> Result<Option<PatientAction>> {
-        self.check_error_timeout(); // Clear error messages if timed out
-        self.check_success_timeout(); // Clear success messages if timed out
+        self.check_error_timeout();
+        self.check_success_timeout();
         match key.code {
             KeyCode::Char(c) => {
                 match self.focus_index {
@@ -104,13 +102,12 @@ impl AddPatient {
                     1 => self.last_name.push(c),
                     2 => self.dob.push(c),
                     3 => {
-                        // Handle gender as text input
                         if c.to_ascii_lowercase() == 'f' {
                             self.gender = Gender::Female;
                         } else if c.to_ascii_lowercase() == 'm' {
                             self.gender = Gender::Male;
                         } else if c.to_ascii_lowercase() == 'o' {
-                            self.gender = Gender::Other; // Assuming you have an Other variant
+                            self.gender = Gender::Other;
                         }
                     }
                     4 => self.address.push(c),
@@ -145,36 +142,36 @@ impl AddPatient {
                     }
                     _ => {}
                 }
-                self.clear_error(); // Clear error on valid input
+                self.clear_error();
             }
             KeyCode::Backspace => {
                 match self.focus_index {
                     0 => self.first_name.pop(),
                     1 => self.last_name.pop(),
                     2 => self.dob.pop(),
-                    3 => None, // Gender selection - handled elsewhere
+                    3 => None,
                     4 => self.address.pop(),
                     5 => self.phone.pop(),
                     6 => self.email.as_mut().and_then(|email| email.pop()),
                     7 => {
                         if let Some(ref mut history) = self.medical_history {
-                            history.pop() // Return the Option<char> from pop()
+                            history.pop()
                         } else {
-                            None // Return None if there's no history
+                            None
                         }
                     }
                     8 => {
                         if let Some(ref mut allergies) = self.allergies {
-                            allergies.pop() // Remove the semicolon to return the Option<char>
+                            allergies.pop()
                         } else {
-                            None // Return None if there are no allergies
+                            None
                         }
                     }
                     9 => {
                         if let Some(ref mut medications) = self.medications {
-                            medications.pop() // Remove the semicolon to return the Option<char>
+                            medications.pop()
                         } else {
-                            None // Return None if there are no medications
+                            None
                         }
                     }
                     _ => None,
@@ -182,40 +179,26 @@ impl AddPatient {
                 self.clear_error();
             }
             KeyCode::Tab => {
-                // If we're in any input field (0-9)
                 if self.focus_index <= 9 {
-                    // Jump directly to Submit button
                     self.focus_index = INPUT_FIELDS;
-                }
-                // If we're at Submit button
-                else if self.focus_index == INPUT_FIELDS {
-                    // Go to Back button
+                } else if self.focus_index == INPUT_FIELDS {
                     self.focus_index = INPUT_FIELDS + 1;
-                }
-                // If we're at Back button
-                else {
-                    // Cycle back to first field
+                } else {
                     self.focus_index = 0;
                 }
             }
             KeyCode::Down => {
-                // Original navigation behavior - field by field
                 self.focus_index = (self.focus_index + 1) % (INPUT_FIELDS + 2);
             }
             KeyCode::Up => {
                 self.focus_index = (self.focus_index + INPUT_FIELDS + 1) % (INPUT_FIELDS + 2);
-                // +2 to include Submit and Back
             }
             KeyCode::Left => {
-                // If we're in the right column (email, medical history, allergies, medications),
-                // move to the corresponding field in the left column
                 if self.focus_index >= 6 && self.focus_index <= 9 {
                     self.focus_index -= 6;
                 }
             }
             KeyCode::Right => {
-                // If we're in the left column (name, dob, gender, address, phone),
-                // move to the corresponding field in the right column
                 if self.focus_index <= 5 {
                     self.focus_index = std::cmp::min(self.focus_index + 6, 9);
                 }
@@ -225,11 +208,8 @@ impl AddPatient {
             }
             KeyCode::Enter => {
                 if self.focus_index == INPUT_FIELDS + 1 {
-                    // "Back" button
                     return Ok(Some(PatientAction::BackToHome));
                 } else if self.focus_index == INPUT_FIELDS {
-                    // "Submit" button
-                    // All fields entered. Add the patient.
                     if self.first_name.is_empty() {
                         self.set_error("First Name cannot be empty".to_string());
                         return Ok(None);
@@ -252,10 +232,10 @@ impl AddPatient {
                     }
 
                     let new_patient = Patient {
-                        id: 0, // The database will assign the ID
+                        id: 0,
                         first_name: self.first_name.clone(),
                         last_name: self.last_name.clone(),
-                        date_of_birth: self.dob.clone(), // Use a date type later
+                        date_of_birth: self.dob.clone(),
                         gender: self.gender.clone(),
                         address: self.address.clone(),
                         phone_number: self.phone.clone(),
@@ -267,23 +247,20 @@ impl AddPatient {
 
                     match db::create_patient(&new_patient) {
                         Ok(_) => {
-                            // Successfully added to database. Now, clear the fields
                             self.first_name.clear();
                             self.last_name.clear();
                             self.dob.clear();
-                            self.gender = Gender::Male; // Reset
+                            self.gender = Gender::Male;
                             self.address.clear();
                             self.phone.clear();
                             self.email = None;
                             self.medical_history = None;
                             self.allergies = None;
                             self.medications = None;
-                            self.focus_index = 0; // Reset
+                            self.focus_index = 0;
 
-                            // Display a success message (you could add this)
                             self.success_message = Some("Patient added successfully!".to_string());
 
-                            // Clear any error message
                             self.clear_error();
                         }
                         Err(e) => {
@@ -300,7 +277,6 @@ impl AddPatient {
 
 impl Component for AddPatient {
     fn handle_input(&mut self, event: KeyEvent) -> Result<Option<crate::app::SelectedApp>> {
-        // Delegate the PatientAction and convert it.
         match self.handle_input(event)? {
             Some(PatientAction::BackToHome) | Some(PatientAction::BackToList) => {
                 Ok(Some(crate::app::SelectedApp::None))
@@ -310,28 +286,25 @@ impl Component for AddPatient {
     }
 
     fn render(&self, frame: &mut Frame) {
-        // Set the global background color to match our theme
         let area = frame.area();
         frame.render_widget(
             Block::default().style(Style::default().bg(Color::Rgb(16, 16, 28))),
             area,
         );
 
-        // Main layout with header, body, and footer sections
         let main_layout = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(3), // Header
-                Constraint::Min(22),   // Body content with input fields
-                Constraint::Length(0), // 2 spaces above error message
-                Constraint::Length(1), // Error message itself
-                Constraint::Length(1), // 1 space below error message
-                Constraint::Length(6), // Footer for vertical buttons
+                Constraint::Length(3),
+                Constraint::Min(22),
+                Constraint::Length(0),
+                Constraint::Length(1),
+                Constraint::Length(1),
+                Constraint::Length(6),
             ])
             .margin(1)
             .split(frame.area());
 
-        // Header with title
         let header = Block::default()
             .borders(Borders::BOTTOM)
             .border_style(Style::default().fg(Color::Rgb(75, 75, 120)))
@@ -348,7 +321,6 @@ impl Component for AddPatient {
             .alignment(Alignment::Center);
         frame.render_widget(title, main_layout[0]);
 
-        // Body container
         let body_block = Block::default()
             .borders(Borders::ALL)
             .border_type(BorderType::Rounded)
@@ -358,41 +330,37 @@ impl Component for AddPatient {
         frame.render_widget(body_block.clone(), main_layout[1]);
         let body_inner = body_block.inner(main_layout[1]);
 
-        // Body section - split into two columns
         let body_layout = Layout::default()
             .direction(Direction::Horizontal)
             .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
             .split(body_inner);
 
-        // Left column for primary info
         let left_layout = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(1), // Section title
-                Constraint::Length(3), // First Name
-                Constraint::Length(3), // Last Name
-                Constraint::Length(3), // DOB
-                Constraint::Length(3), // Gender
-                Constraint::Length(3), // Address
-                Constraint::Length(3), // Phone
+                Constraint::Length(1),
+                Constraint::Length(3),
+                Constraint::Length(3),
+                Constraint::Length(3),
+                Constraint::Length(3),
+                Constraint::Length(3),
+                Constraint::Length(3),
             ])
             .margin(1)
             .split(body_layout[0]);
 
-        // Right column for secondary info
         let right_layout = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(1), // Section title
-                Constraint::Length(3), // Email
-                Constraint::Length(5), // Medical History (taller)
-                Constraint::Length(5), // Allergies (taller)
-                Constraint::Length(5), // Medications (taller)
+                Constraint::Length(1),
+                Constraint::Length(3),
+                Constraint::Length(5),
+                Constraint::Length(5),
+                Constraint::Length(5),
             ])
             .margin(1)
             .split(body_layout[1]);
 
-        // Section titles
         let primary_title = Paragraph::new("● REQUIRED INFORMATION").style(
             Style::default()
                 .fg(Color::Rgb(250, 250, 110))
@@ -409,11 +377,8 @@ impl Component for AddPatient {
         );
         frame.render_widget(secondary_title, right_layout[0]);
 
-        // Primary Info Fields (Left Column)
-        // Each field gets styled differently when focused
         let required_style = Style::default().fg(Color::Rgb(230, 230, 250));
 
-        // First Name (required)
         let first_name_input = Paragraph::new(self.first_name.clone())
             .style(
                 Style::default()
@@ -434,7 +399,6 @@ impl Component for AddPatient {
             );
         frame.render_widget(first_name_input, left_layout[1]);
 
-        // Last Name (required)
         let last_name_input = Paragraph::new(self.last_name.clone())
             .style(
                 Style::default()
@@ -455,7 +419,6 @@ impl Component for AddPatient {
             );
         frame.render_widget(last_name_input, left_layout[2]);
 
-        // Date of Birth (required)
         let dob_input = Paragraph::new(self.dob.clone())
             .style(
                 Style::default()
@@ -477,7 +440,6 @@ impl Component for AddPatient {
             );
         frame.render_widget(dob_input, left_layout[3]);
 
-        // Gender as an input field
         let gender_text = match self.gender {
             Gender::Male => "Male",
             Gender::Female => "Female",
@@ -504,7 +466,6 @@ impl Component for AddPatient {
             );
         frame.render_widget(gender_input, left_layout[4]);
 
-        // Address (required)
         let address_input = Paragraph::new(self.address.clone())
             .style(
                 Style::default()
@@ -525,7 +486,6 @@ impl Component for AddPatient {
             );
         frame.render_widget(address_input, left_layout[5]);
 
-        // Phone (required)
         let phone_input = Paragraph::new(self.phone.clone())
             .style(
                 Style::default()
@@ -546,10 +506,8 @@ impl Component for AddPatient {
             );
         frame.render_widget(phone_input, left_layout[6]);
 
-        // Secondary Info Fields (Right Column)
         let optional_style = Style::default().fg(Color::Rgb(180, 180, 200));
 
-        // Email (optional)
         let email_input = Paragraph::new(self.email.clone().unwrap_or_default())
             .style(
                 Style::default()
@@ -570,7 +528,6 @@ impl Component for AddPatient {
             );
         frame.render_widget(email_input, right_layout[1]);
 
-        // Medical History (optional) - multi-line
         let history_input = Paragraph::new(self.medical_history.clone().unwrap_or_default())
             .style(
                 Style::default()
@@ -592,7 +549,6 @@ impl Component for AddPatient {
             .wrap(Wrap { trim: true });
         frame.render_widget(history_input, right_layout[2]);
 
-        // Allergies (optional) - multi-line
         let allergies_input = Paragraph::new(self.allergies.clone().unwrap_or_default())
             .style(
                 Style::default()
@@ -614,7 +570,6 @@ impl Component for AddPatient {
             .wrap(Wrap { trim: true });
         frame.render_widget(allergies_input, right_layout[3]);
 
-        // Medications (optional) - multi-line
         let medications_input = Paragraph::new(self.medications.clone().unwrap_or_default())
             .style(
                 Style::default()
@@ -636,7 +591,6 @@ impl Component for AddPatient {
             .wrap(Wrap { trim: true });
         frame.render_widget(medications_input, right_layout[4]);
 
-        // Error or success message area
         let status_message = if let Some(success) = &self.success_message {
             Paragraph::new(format!("✓ {}", success))
                 .style(
@@ -663,13 +617,12 @@ impl Component for AddPatient {
         let footer_layout = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(2), // Submit button
-                Constraint::Length(2), // Back button
-                Constraint::Min(2),    // Help text
+                Constraint::Length(2),
+                Constraint::Length(2),
+                Constraint::Min(2),
             ])
             .split(main_layout[5]);
 
-        // Submit button - simple text version
         let submit_text = if self.focus_index == INPUT_FIELDS {
             "► Submit ◄"
         } else {
@@ -689,7 +642,6 @@ impl Component for AddPatient {
             .alignment(Alignment::Center);
         frame.render_widget(submit_button, footer_layout[0]);
 
-        // Back button - simple text version
         let back_text = if self.focus_index == INPUT_FIELDS + 1 {
             "► Back ◄"
         } else {
@@ -709,7 +661,6 @@ impl Component for AddPatient {
             .alignment(Alignment::Center);
         frame.render_widget(back_button, footer_layout[1]);
 
-        // Help text
         let help_text = Paragraph::new("Tab: Switch Focus | Arrow Keys: Switch Fields | Enter: Submit | Esc: Back\nFor Gender: Type 'M' for Male, 'F' for Female, 'O' for Others")
 .style(Style::default().fg(Color::Rgb(140, 140, 170)).bg(Color::Rgb(16, 16, 28)))
 .alignment(Alignment::Center);

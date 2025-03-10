@@ -1,4 +1,3 @@
-
 CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY, 
     username TEXT NOT NULL UNIQUE,
@@ -14,7 +13,7 @@ CREATE TABLE IF NOT EXISTS patients (
    address TEXT NOT NULL,
    phone_number TEXT NOT NULL, 
    email TEXT, 
-   medical_history TEXT, -
+   medical_history TEXT,
    allergies TEXT, 
    current_medications TEXT 
 );

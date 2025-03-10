@@ -1,8 +1,3 @@
-//! Add Staff component for the Hospital application.
-//!
-//! This module provides a TUI form for adding new staff members to the hospital system.
-//! It includes form validation, error handling, and a user-friendly interface.
-
 use crate::app::SelectedApp;
 use crate::components::Component;
 use crate::db;
@@ -13,48 +8,28 @@ use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{prelude::*, widgets::*};
 use std::time::{Duration, Instant};
 
-/// Component to add a new staff member.
-///
-/// Manages the form state, input validation, and rendering
-/// for the staff addition process.
 pub struct AddStaff {
-    /// Staff member's full name
     name: String,
-    /// Staff role selection (Doctor, Nurse, Admin, Technician)
     role: StaffRole,
-    /// Contact phone number
     phone: String,
-    /// Optional email address
     email: Option<String>,
-    /// Staff member's address
     address: String,
-    /// Currently focused input field index
     focus_index: usize,
-    /// Error message to display (if any)
     error_message: Option<String>,
-    /// Timer for auto-clearing error messages
     error_timer: Option<Instant>,
-    /// Success message to display (if any)
     success_message: Option<String>,
-    /// Timer for auto-clearing success messages
     success_timer: Option<Instant>,
 }
 
-/// Constants for form field indices
-const INPUT_FIELDS: usize = 5; // Number of input fields
+const INPUT_FIELDS: usize = 5;
 const SUBMIT_BUTTON: usize = 5;
 const BACK_BUTTON: usize = 6;
 
 impl AddStaff {
-    /// Creates a new `AddStaff` component with default values.
-    ///
-    /// # Returns
-    ///
-    /// A new instance of `AddStaff` with empty fields and default role.
     pub fn new() -> Self {
         Self {
             name: String::new(),
-            role: StaffRole::Doctor, // Default role
+            role: StaffRole::Doctor,
             phone: String::new(),
             email: None,
             address: String::new(),
@@ -66,39 +41,21 @@ impl AddStaff {
         }
     }
 
-    /// Clears any existing error message.
     fn clear_error(&mut self) {
         self.error_message = None;
         self.error_timer = None;
     }
 
-    /// Sets an error message to display to the user.
-    ///
-    /// # Arguments
-    ///
-    /// * `message` - The error message to display
     fn set_error(&mut self, message: String) {
         self.error_message = Some(message);
         self.error_timer = Some(Instant::now());
     }
 
-    /// Clears any existing success message.
     fn clear_success(&mut self) {
         self.success_message = None;
         self.success_timer = None;
     }
 
-    /// Processes input events for the form.
-    ///
-    /// Handles character input, navigation between fields, and form submission.
-    ///
-    /// # Arguments
-    ///
-    /// * `key` - The keyboard event to process
-    ///
-    /// # Returns
-    ///
-    /// Optionally returns a new application state if navigation occurs
     fn process_input(&mut self, key: KeyEvent) -> Result<Option<SelectedApp>> {
         self.check_timeouts();
         match key.code {
@@ -106,7 +63,6 @@ impl AddStaff {
                 match self.focus_index {
                     0 => self.name.push(c),
                     1 => {
-                        // Handle Role Selection with key
                         if c.to_ascii_lowercase() == 'd' {
                             self.role = StaffRole::Doctor;
                         } else if c.to_ascii_lowercase() == 'n' {
@@ -152,19 +108,11 @@ impl AddStaff {
                 self.clear_error();
             }
             KeyCode::Tab => {
-                // If we're in any input field (0-4)
                 if self.focus_index <= INPUT_FIELDS - 1 {
-                    // Jump directly to Submit button
                     self.focus_index = SUBMIT_BUTTON;
-                }
-                // If we're at Submit button
-                else if self.focus_index == SUBMIT_BUTTON {
-                    // Go to Back button
+                } else if self.focus_index == SUBMIT_BUTTON {
                     self.focus_index = BACK_BUTTON;
-                }
-                // If we're at Back button
-                else {
-                    // Cycle back to first field
+                } else {
                     self.focus_index = 0;
                 }
             }
@@ -174,19 +122,13 @@ impl AddStaff {
             KeyCode::Up => {
                 self.focus_index = (self.focus_index + BACK_BUTTON) % (BACK_BUTTON + 1);
             }
-            KeyCode::Left => {
-                // No left behavior
-            }
-            KeyCode::Right => {
-                // No right behavior
-            }
+            KeyCode::Left => {}
+            KeyCode::Right => {}
             KeyCode::Enter => {
                 if self.focus_index == BACK_BUTTON {
-                    // Back button
                     return Ok(Some(SelectedApp::None));
                 }
                 if self.focus_index == SUBMIT_BUTTON {
-                    // Submit - Validate data
                     if self.name.is_empty() {
                         self.set_error("Name cannot be empty".to_string());
                         return Ok(None);
@@ -201,7 +143,7 @@ impl AddStaff {
                     }
 
                     let new_staff_member = StaffMember {
-                        id: 0, // Database will assign
+                        id: 0,
                         name: self.name.clone(),
                         role: self.role.clone(),
                         phone_number: self.phone.clone(),
@@ -214,7 +156,7 @@ impl AddStaff {
                             self.success_message =
                                 Some("Staff member added successfully!".to_string());
                             self.success_timer = Some(Instant::now());
-                            // Clear form
+
                             self.name.clear();
                             self.role = StaffRole::Doctor;
                             self.phone.clear();
@@ -230,8 +172,7 @@ impl AddStaff {
                 }
             }
             KeyCode::Esc => {
-                // Go back to the staff list (or hospital main menu)
-                return Ok(Some(SelectedApp::None)); // Go back
+                return Ok(Some(SelectedApp::None));
             }
             _ => {}
         }
@@ -239,7 +180,6 @@ impl AddStaff {
         Ok(None)
     }
 
-    /// Checks if the success message has timed out and clears it if needed.
     fn check_success_timeout(&mut self) {
         if let Some(timer) = self.success_timer {
             if timer.elapsed() > Duration::from_secs(5) {
@@ -248,7 +188,6 @@ impl AddStaff {
         }
     }
 
-    /// Checks if the error message has timed out and clears it if needed.
     fn check_error_timeout(&mut self) {
         if let Some(timer) = self.error_timer {
             if timer.elapsed() > Duration::from_secs(5) {
@@ -257,7 +196,6 @@ impl AddStaff {
         }
     }
 
-    /// Checks both error and success message timeouts.
     fn check_timeouts(&mut self) {
         self.check_error_timeout();
         self.check_success_timeout();
@@ -274,7 +212,6 @@ impl Component for AddStaff {
     fn handle_input(&mut self, event: KeyEvent) -> Result<Option<SelectedApp>> {
         self.check_timeouts();
 
-        // Directly return the SelectedApp if input leads to a selection.
         if let Some(selected_app) = self.process_input(event)? {
             return Ok(Some(selected_app));
         }
@@ -282,28 +219,25 @@ impl Component for AddStaff {
     }
 
     fn render(&self, frame: &mut Frame) {
-        // Set the global background color to match our theme
         let area = frame.area();
         frame.render_widget(
             Block::default().style(Style::default().bg(Color::Rgb(16, 16, 28))),
             area,
         );
 
-        // Main layout with header, body, and footer sections
         let main_layout = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(3), // Header
-                Constraint::Min(22),   // Body content with input fields
-                Constraint::Length(0), // 2 spaces above error message
-                Constraint::Length(1), // Error message itself
-                Constraint::Length(1), // 1 space below error message
-                Constraint::Length(6), // Footer for vertical buttons
+                Constraint::Length(3),
+                Constraint::Min(22),
+                Constraint::Length(0),
+                Constraint::Length(1),
+                Constraint::Length(1),
+                Constraint::Length(6),
             ])
             .margin(1)
             .split(frame.area());
 
-        // Header with title
         let header = Block::default()
             .borders(Borders::BOTTOM)
             .border_style(Style::default().fg(Color::Rgb(75, 75, 120)))
@@ -320,7 +254,6 @@ impl Component for AddStaff {
             .alignment(Alignment::Center);
         frame.render_widget(title, main_layout[0]);
 
-        // Body container
         let body_block = Block::default()
             .borders(Borders::ALL)
             .border_type(BorderType::Rounded)
@@ -330,20 +263,18 @@ impl Component for AddStaff {
         frame.render_widget(body_block.clone(), main_layout[1]);
         let body_inner = body_block.inner(main_layout[1]);
 
-        // Body section
         let body_layout = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(3), // Name
-                Constraint::Length(3), // Role
-                Constraint::Length(3), // Phone
-                Constraint::Length(3), // Email
-                Constraint::Length(3), // Address
+                Constraint::Length(3),
+                Constraint::Length(3),
+                Constraint::Length(3),
+                Constraint::Length(3),
+                Constraint::Length(3),
             ])
             .margin(1)
             .split(body_inner);
 
-        // Name Input
         let name_input = Paragraph::new(self.name.clone())
             .style(
                 Style::default()
@@ -371,7 +302,6 @@ impl Component for AddStaff {
             );
         frame.render_widget(name_input, body_layout[0]);
 
-        // Role as an input field
         let role_text = match self.role {
             StaffRole::Doctor => "Doctor",
             StaffRole::Nurse => "Nurse",
@@ -406,7 +336,6 @@ impl Component for AddStaff {
             );
         frame.render_widget(role_input, body_layout[1]);
 
-        // Phone
         let phone_input = Paragraph::new(self.phone.clone())
             .style(
                 Style::default()
@@ -434,7 +363,6 @@ impl Component for AddStaff {
             );
         frame.render_widget(phone_input, body_layout[2]);
 
-        // Email
         let email_input = Paragraph::new(self.email.clone().unwrap_or_default())
             .style(
                 Style::default()
@@ -462,7 +390,6 @@ impl Component for AddStaff {
             );
         frame.render_widget(email_input, body_layout[3]);
 
-        // Address
         let address_input = Paragraph::new(self.address.clone())
             .style(
                 Style::default()
@@ -490,7 +417,6 @@ impl Component for AddStaff {
             );
         frame.render_widget(address_input, body_layout[4]);
 
-        // Error or success message area
         let status_message = if let Some(success) = &self.success_message {
             Paragraph::new(format!("✓ {}", success))
                 .style(
@@ -517,13 +443,12 @@ impl Component for AddStaff {
         let footer_layout = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(2), // Submit button
-                Constraint::Length(2), // Back button
-                Constraint::Min(2),    // Help text
+                Constraint::Length(2),
+                Constraint::Length(2),
+                Constraint::Min(2),
             ])
             .split(main_layout[5]);
 
-        // Submit button - simple text version
         let submit_text = if self.focus_index == SUBMIT_BUTTON {
             "► Submit ◄"
         } else {
@@ -543,7 +468,6 @@ impl Component for AddStaff {
             .alignment(Alignment::Center);
         frame.render_widget(submit_button, footer_layout[0]);
 
-        // Back button - simple text version
         let back_text = if self.focus_index == BACK_BUTTON {
             "► Back ◄"
         } else {
@@ -563,7 +487,6 @@ impl Component for AddStaff {
             .alignment(Alignment::Center);
         frame.render_widget(back_button, footer_layout[1]);
 
-        // Help text
         let help_text = "Tab: Switch Focus | Arrow Keys: Switch Fields | Enter: Submit | Esc: Back\nFor Role: Type 'D' for Doctor, 'N' for Nurse, 'A' for Admin, 'T' for Technician";
         let help_paragraph = Paragraph::new(help_text)
             .style(

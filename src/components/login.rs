@@ -1,5 +1,3 @@
-//! Login component for Rustoria.
-
 use crate::app::SelectedApp;
 use crate::components::Component;
 use crate::tui::Frame;
@@ -11,37 +9,25 @@ use ratatui::{
 };
 use std::time::{Duration, Instant};
 
-/// Represents the login UI component.
 #[derive(Debug, Default)]
 pub struct Login {
-    /// The username input field.
     pub username: String,
-    /// The password input field.
     pub password: String,
-    /// Flag that indicates whether the username input is active
     #[allow(dead_code)]
     pub focus_username: bool,
-    /// Optional error message to display.
     pub error_message: Option<String>,
-    /// New field for success messages
     pub success_message: Option<String>,
-    /// Current selection in the login screen (0: Username, 1: Password, 2: Exit, 3: Create Account)
     pub selected_index: usize,
-    /// Flag to indicate if the exit confirmation dialog is open
     pub show_exit_dialog: bool,
-    /// Selected option in the exit dialog (0: Yes, 1: No)
     pub exit_dialog_selected: usize,
-    /// Time when the error message was last shown.
-    error_message_time: Option<Instant>,
-    /// Time when the success message was last shown.
-    success_message_time: Option<Instant>,
+    error_message_time: Option<std::time::Instant>,
+    success_message_time: Option<std::time::Instant>,
 }
 
 impl Login {
-    /// Creates a new `Login` component.
     pub fn new() -> Self {
         Self {
-            focus_username: true, // Start with focus on the username field.
+            focus_username: true,
             selected_index: 0,
             show_exit_dialog: false,
             exit_dialog_selected: 0,
@@ -50,28 +36,26 @@ impl Login {
         }
     }
 
-    /// Handles exit dialog input separately
     fn handle_exit_dialog_input(&mut self, key: KeyEvent) -> Result<bool> {
         match key.code {
             KeyCode::Left | KeyCode::Right => {
-                self.exit_dialog_selected = 1 - self.exit_dialog_selected; // Toggle
+                self.exit_dialog_selected = 1 - self.exit_dialog_selected;
             }
             KeyCode::Enter => {
                 if self.exit_dialog_selected == 0 {
-                    return Ok(true); // Yes: Exit
+                    return Ok(true);
                 } else {
-                    self.show_exit_dialog = false; // No: Close dialog
+                    self.show_exit_dialog = false;
                 }
             }
             KeyCode::Esc => {
-                self.show_exit_dialog = false; // Close dialog on Esc
+                self.show_exit_dialog = false;
             }
             _ => {}
         }
         Ok(false)
     }
 
-    /// Handles login input separately
     fn handle_login_input(&mut self, key: KeyEvent) -> Result<bool> {
         match key.code {
             KeyCode::Char(c) => {
@@ -80,7 +64,7 @@ impl Login {
                 } else if self.selected_index == 1 {
                     self.password.push(c);
                 }
-                self.clear_error_message(); // Clear error on input
+                self.clear_error_message();
             }
             KeyCode::Backspace => {
                 if self.selected_index == 0 {
@@ -91,74 +75,62 @@ impl Login {
                 self.clear_error_message();
             }
             KeyCode::Tab | KeyCode::Down => {
-                // 0: Username, 1: Password, 2: Create Account, 3: Exit
                 self.selected_index = (self.selected_index + 1) % 4;
             }
             KeyCode::Up => {
-                // 0: Username, 1: Password, 2: Create Account, 3: Exit
                 self.selected_index = (self.selected_index + 3) % 4;
             }
-            KeyCode::Enter => {
-                match self.selected_index {
-                    0 | 1 => {
-                        // Check for empty fields before signaling login attempt
-                        if self.username.is_empty() {
-                            self.set_error_message("⚠️ Username cannot be empty.".to_string());
-                            return Ok(false);
-                        }
-
-                        if self.password.is_empty() {
-                            self.set_error_message("⚠️ Password cannot be empty.".to_string());
-                            return Ok(false);
-                        }
-
-                        return Ok(true); // Signal login attempt
-                    }
-                    2 => {
-                        // User selected "Create Account"
-                        return Ok(true);
-                    }
-                    3 => {
-                        // Exit
-                        self.show_exit_dialog = true;
+            KeyCode::Enter => match self.selected_index {
+                0 | 1 => {
+                    if self.username.is_empty() {
+                        self.set_error_message("⚠️ Username cannot be empty.".to_string());
                         return Ok(false);
                     }
-                    _ => {}
+
+                    if self.password.is_empty() {
+                        self.set_error_message("⚠️ Password cannot be empty.".to_string());
+                        return Ok(false);
+                    }
+
+                    return Ok(true);
                 }
-            }
+                2 => {
+                    return Ok(true);
+                }
+                3 => {
+                    self.show_exit_dialog = true;
+                    return Ok(false);
+                }
+                _ => {}
+            },
             KeyCode::Esc => {
-                self.show_exit_dialog = !self.show_exit_dialog; // Toggle dialog
+                self.show_exit_dialog = !self.show_exit_dialog;
             }
             _ => {}
         }
         Ok(false)
     }
 
-    /// Clears the error message and resets the timer.
     fn clear_error_message(&mut self) {
         self.error_message = None;
         self.error_message_time = None;
     }
 
-    /// Clears the success message and resets the timer.
     fn clear_success_message(&mut self) {
         self.success_message = None;
         self.success_message_time = None;
     }
 
-    /// Updates the error message and sets the timer.
     fn set_error_message(&mut self, message: String) {
         self.error_message = Some(message);
         self.error_message_time = Some(Instant::now());
     }
 
-    /// Updates the success message and resets the timer.
     pub fn set_success_message(&mut self, message: String) {
         self.success_message = Some(message);
         self.success_message_time = Some(Instant::now());
     }
 
-    /// Checks if the error message should be hidden (timeout).
     pub fn check_error_timeout(&mut self) {
         if let Some(time) = self.error_message_time {
             if time.elapsed() >= Duration::from_secs(5) {
@@ -167,16 +139,13 @@ impl Login {
         }
     }
 
-    /// Checks if the error message should be hidden (timeout).
     pub fn check_message_timeouts(&mut self) {
-        // Keep your existing error message timeout check
         if let Some(time) = self.error_message_time {
             if time.elapsed() >= Duration::from_secs(5) {
                 self.clear_error_message();
             }
         }
 
-        // Add success message timeout check
         if let Some(time) = self.success_message_time {
             if time.elapsed() >= Duration::from_secs(5) {
                 self.clear_success_message();
@@ -185,7 +154,6 @@ impl Login {
     }
 }
 
-/// Helper function to create a centered rect using up certain percentage of the available rect
 fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
     let popup_layout = Layout::default()
         .direction(Direction::Vertical)
@@ -211,17 +179,15 @@ impl Component for Login {
         self.check_message_timeouts();
 
         if self.show_exit_dialog {
-            // If dialog is showing, *only* handle dialog input.
             if self.handle_exit_dialog_input(event)? {
                 return Ok(Some(SelectedApp::Quit));
             }
         } else {
-            // Handle regular login attempt
             if self.handle_login_input(event)? {
                 if self.selected_index == 2 {
-                    return Ok(Some(SelectedApp::Hospital)); // Use a special value
+                    return Ok(Some(SelectedApp::Hospital));
                 } else {
-                    return Ok(Some(SelectedApp::None)); // Signal login attempt
+                    return Ok(Some(SelectedApp::None));
                 }
             }
         }
@@ -229,7 +195,6 @@ impl Component for Login {
     }
 
     fn render(&self, frame: &mut Frame) {
-        // Set the global background color
         frame.render_widget(
             Block::default().style(Style::default().bg(Color::Rgb(16, 16, 28))),
             frame.area(),
@@ -239,28 +204,27 @@ impl Component for Login {
             .direction(Direction::Vertical)
             .constraints(
                 [
-                    Constraint::Length(7), // 0: Title
-                    Constraint::Length(1), // 1: Slogan
-                    Constraint::Length(2), // 2: Spacing
-                    Constraint::Length(1), // 3: "Login to Rustoria"
-                    Constraint::Length(1), // 4: spacing
-                    Constraint::Length(3), // 5: Username
-                    Constraint::Length(3), // 6: Password
-                    Constraint::Length(2), // 7: Error message
-                    Constraint::Length(1), // 8: Spacing before options
-                    Constraint::Length(2), // 9: Create Account text
-                    Constraint::Length(1), // 10: Spacing before "Exit"
-                    Constraint::Length(1), // 11: Exit text
-                    Constraint::Length(3), // 12: Spacing between Exit and Help
-                    Constraint::Length(1), // 13: Help text
-                    Constraint::Min(0),    // 14: Remaining space
+                    Constraint::Length(7),
+                    Constraint::Length(1),
+                    Constraint::Length(2),
+                    Constraint::Length(1),
+                    Constraint::Length(1),
+                    Constraint::Length(3),
+                    Constraint::Length(3),
+                    Constraint::Length(2),
+                    Constraint::Length(1),
+                    Constraint::Length(2),
+                    Constraint::Length(1),
+                    Constraint::Length(1),
+                    Constraint::Length(3),
+                    Constraint::Length(1),
+                    Constraint::Min(0),
                 ]
                 .as_ref(),
             )
             .margin(1)
             .split(frame.area());
 
-        // --- Title ---
         let title = Paragraph::new(Text::from(vec![
             Line::from("██████╗░██╗░░░██╗░██████╗████████╗░█████╗░██████╗░██╗░█████╗░".to_string()),
             Line::from("██╔══██╗██║░░░██║██╔════╝╚══██╔══╝██╔══██╗██╔══██╗██║██╔══██╗".to_string()),
@@ -270,15 +234,14 @@ impl Component for Login {
             Line::from("╚═╝░░╚═╝░╚═════╝░╚═════╝░░░░╚═╝░░░░╚════╝░╚═╝░░╚═╝╚═╝╚═╝░░╚═╝".to_string()),
         ]))
         .alignment(Alignment::Center)
-        .style(Style::default().fg(Color::Rgb(129, 199, 245))); // Updated color to match home page theme
+        .style(Style::default().fg(Color::Rgb(129, 199, 245)));
         frame.render_widget(title, vertical_layout[0]);
 
-        // --- Slogan ---
         let title_block = Block::default().borders(Borders::NONE);
         let title = Paragraph::new(Text::from(vec![Line::from(Span::styled(
             "Seamless Hospital & Pharmacy Operations",
             Style::default()
-                .fg(Color::Rgb(140, 219, 140)) // Green color from home page
+                .fg(Color::Rgb(140, 219, 140))
                 .add_modifier(Modifier::BOLD)
                 .add_modifier(Modifier::ITALIC),
         ))]))
@@ -286,7 +249,6 @@ impl Component for Login {
         .alignment(Alignment::Center);
         frame.render_widget(title, vertical_layout[1]);
 
-        // --- Login Form Container ---
         let login_area = centered_rect(70, 48, frame.area());
         let login_block = Block::default()
             .borders(Borders::ALL)
@@ -295,7 +257,6 @@ impl Component for Login {
             .style(Style::default().bg(Color::Rgb(22, 22, 35)));
         frame.render_widget(login_block.clone(), login_area);
 
-        // --- "Login to Rustoria" ---
         let subtitle = Paragraph::new(Span::styled(
             "Login to Rustoria",
             Style::default()
@@ -305,7 +266,6 @@ impl Component for Login {
         .alignment(Alignment::Center);
         frame.render_widget(subtitle, vertical_layout[3]);
 
-        // --- Username ---
         let username_block = Block::default()
             .borders(Borders::ALL)
             .border_type(BorderType::Rounded)
@@ -316,13 +276,12 @@ impl Component for Login {
                     .add_modifier(Modifier::BOLD),
             )
             .border_style(if self.selected_index == 0 {
-                Style::default().fg(Color::Rgb(250, 250, 110)) // Yellow highlight when selected
+                Style::default().fg(Color::Rgb(250, 250, 110))
             } else {
                 Style::default().fg(Color::Rgb(140, 140, 200))
             })
             .style(Style::default().bg(Color::Rgb(26, 26, 36)));
 
-        // Create a narrower area for the username field (60% of width, centered)
         let username_area = centered_rect(60, 100, vertical_layout[5]);
         let username_input = Paragraph::new(self.username.clone())
             .block(username_block)
@@ -330,7 +289,6 @@ impl Component for Login {
             .alignment(Alignment::Left);
         frame.render_widget(username_input, username_area);
 
-        // --- Password ---
         let password_block = Block::default()
             .borders(Borders::ALL)
             .border_type(BorderType::Rounded)
@@ -341,13 +299,12 @@ impl Component for Login {
                     .add_modifier(Modifier::BOLD),
             )
             .border_style(if self.selected_index == 1 {
-                Style::default().fg(Color::Rgb(250, 250, 110)) // Yellow highlight when selected
+                Style::default().fg(Color::Rgb(250, 250, 110))
             } else {
                 Style::default().fg(Color::Rgb(140, 140, 200))
             })
             .style(Style::default().bg(Color::Rgb(26, 26, 36)));
 
-        // Create a narrower area for the password field (60% of width, centered)
         let password_area = centered_rect(60, 100, vertical_layout[6]);
         let password_input = Paragraph::new("•".repeat(self.password.len()))
             .block(password_block)
@@ -355,7 +312,6 @@ impl Component for Login {
             .alignment(Alignment::Left);
         frame.render_widget(password_input, password_area);
 
-        // --- Error Message ---
         if let Some(error) = &self.error_message {
             let error_message = Paragraph::new(Span::styled(
                 error,
@@ -376,7 +332,6 @@ impl Component for Login {
             frame.render_widget(success_message, vertical_layout[7]);
         }
 
-        // --- Create Account ---
         let create_account_style = if self.selected_index == 2 {
             Style::default()
                 .fg(Color::Rgb(250, 250, 110))
@@ -394,7 +349,6 @@ impl Component for Login {
         .alignment(Alignment::Center);
         frame.render_widget(create_account_text, vertical_layout[9]);
 
-        // --- Exit ---
         let exit_style = if self.selected_index == 3 {
             Style::default()
                 .fg(Color::Rgb(255, 100, 100))
@@ -412,7 +366,6 @@ impl Component for Login {
         .alignment(Alignment::Center);
         frame.render_widget(exit_text, vertical_layout[11]);
 
-        // --- Help Text ---
         let help_text = Paragraph::new(
             "TAB/Arrow Keys: Navigate | ENTER: Login/Select | ESC: Toggle Exit Dialog",
         )
@@ -420,7 +373,6 @@ impl Component for Login {
         .alignment(Alignment::Center);
         frame.render_widget(help_text, vertical_layout[13]);
 
-        // --- Exit Dialog ---
         if self.show_exit_dialog {
             let dialog_width = 40;
             let dialog_height = 8;
@@ -432,10 +384,8 @@ impl Component for Login {
                 dialog_height,
             );
 
-            // Clear the background
             frame.render_widget(Clear, dialog_area);
 
-            // Render dialog box - updated to match the app theme
             let dialog_block = Block::default()
                 .title(" Confirm Exit ")
                 .title_style(
@@ -450,16 +400,12 @@ impl Component for Login {
 
             frame.render_widget(dialog_block.clone(), dialog_area);
 
-            // Dialog content
             let inner_area = dialog_block.inner(dialog_area);
 
             let content_layout = Layout::default()
                 .direction(Direction::Vertical)
                 .margin(1)
-                .constraints([
-                    Constraint::Length(2), // Message
-                    Constraint::Length(2), // Buttons
-                ])
+                .constraints([Constraint::Length(2), Constraint::Length(2)])
                 .split(inner_area);
 
             let message = Paragraph::new("Are you sure you want to exit?")
@@ -469,13 +415,11 @@ impl Component for Login {
 
             frame.render_widget(message, content_layout[0]);
 
-            // Buttons
             let buttons_layout = Layout::default()
                 .direction(Direction::Horizontal)
                 .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
                 .split(content_layout[1]);
 
-            // Updated button styles to match the app theme
             let yes_style = if self.exit_dialog_selected == 0 {
                 Style::default()
                     .fg(Color::Rgb(140, 219, 140))

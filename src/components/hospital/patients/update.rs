@@ -1,10 +1,3 @@
-//! Update Patient component for the Hospital application.
-//!
-//! This component provides a UI for selecting and updating patient details.
-//! It has two main states:
-//! 1. Patient Selection - Shows a table of patients and an ID input field
-//! 2. Patient Editing - Shows patient details in a table with an editor below
-
 use crate::app::SelectedApp;
 use crate::components::hospital::patients::PatientAction;
 use crate::components::Component;
@@ -16,45 +9,39 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::{prelude::*, widgets::*};
 use std::time::{Duration, Instant};
 
-/// Enum for confirmation dialog actions
 enum ConfirmAction {
     UpdatePatient,
 }
 
-/// Component states to manage the UI flow
 enum UpdateState {
-    /// Initial state showing a list of patients to select from
     SelectingPatient,
-    /// After selection, shows editable fields for the patient
     EditingPatient,
 }
 
-/// Component to update an existing patient's information.
 pub struct UpdatePatient {
-    all_patients: Vec<Patient>,      // All patients for selection table
-    filtered_patients: Vec<Patient>, // Filtered patients based on search
-    search_input: String,            // Search input text
-    is_searching: bool,              // Whether user is currently typing in search box
-    table_state: TableState,         // Track which row in the selection table is selected
-    update_state: UpdateState,       // Current component state
-    patient_id_input: String,        // Input for patient ID
-    patient: Patient,                // The patient data being updated
-    loaded: bool,                    // Flag: Has the initial patient data been loaded?
-    selected_field: Option<usize>,   // Currently selected field
-    edit_table_state: TableState,    // State for the editing table
-    input_value: String,             // Current value being edited
-    editing: bool,                   // Whether we're currently editing a value
+    all_patients: Vec<Patient>,
+    filtered_patients: Vec<Patient>,
+    search_input: String,
+    is_searching: bool,
+    table_state: TableState,
+    update_state: UpdateState,
+    patient_id_input: String,
+    patient: Patient,
+    loaded: bool,
+    selected_field: Option<usize>,
+    edit_table_state: TableState,
+    input_value: String,
+    editing: bool,
     error_message: Option<String>,
     error_timer: Option<Instant>,
     success_message: Option<String>,
     success_timer: Option<Instant>,
-    show_confirmation: bool,      // Whether to show confirmation dialog
-    confirmation_message: String, // Message in the confirmation dialog
-    confirmed_action: Option<ConfirmAction>, // Action to perform if confirmed
-    confirmation_selected: usize, // Which confirmation button is selected (0 for Yes, 1 for No)
+    show_confirmation: bool,
+    confirmation_message: String,
+    confirmed_action: Option<ConfirmAction>,
+    confirmation_selected: usize,
 }
 
-// Field constants
 const ID_INPUT: usize = 0;
 const FIRST_NAME_INPUT: usize = 1;
 const LAST_NAME_INPUT: usize = 2;
@@ -69,18 +56,13 @@ const MEDICATIONS_INPUT: usize = 10;
 const INPUT_FIELDS: usize = 10;
 
 impl UpdatePatient {
-    /// Creates a new `UpdatePatient` component.
-    ///
-    /// Initializes the component with the patient selection view and
-    /// loads all patients from the database for the selection table.
     pub fn new() -> Self {
         let mut selection_state = TableState::default();
-        selection_state.select(Some(0)); // Start with the first row selected
+        selection_state.select(Some(0));
 
         let mut edit_table_state = TableState::default();
         edit_table_state.select(Some(0));
 
-        // Load all patients for the selection table
         let all_patients = match db::get_all_patients() {
             Ok(patients) => patients,
             Err(_) => Vec::new(),
@@ -119,14 +101,12 @@ impl UpdatePatient {
             show_confirmation: false,
             confirmation_message: String::new(),
             confirmed_action: None,
-            confirmation_selected: 0, // Default to "Yes"
+            confirmation_selected: 0,
         }
     }
 
-    /// Filter patients based on the search term
     fn filter_patients(&mut self) {
         if self.search_input.is_empty() {
-            // If search is empty, show all patients
             self.filtered_patients = self.all_patients.clone();
         } else {
             let search_term = self.search_input.to_lowercase();
@@ -134,7 +114,6 @@ impl UpdatePatient {
                 .all_patients
                 .iter()
                 .filter(|p| {
-                    // Case-insensitive search in multiple fields
                     p.first_name.to_lowercase().contains(&search_term)
                         || p.last_name.to_lowercase().contains(&search_term)
                         || p.id.to_string().contains(&search_term)
@@ -144,7 +123,6 @@ impl UpdatePatient {
                 .collect();
         }
 
-        // Reset selection if it's now out of bounds
         if let Some(selected) = self.table_state.selected() {
             if selected >= self.filtered_patients.len() && !self.filtered_patients.is_empty() {
                 self.table_state.select(Some(0));
@@ -152,9 +130,6 @@ impl UpdatePatient {
         }
     }
 
-    /// Load patient data by ID from the database
-    ///
-    /// Transitions to editing mode if the patient is found
     fn load_patient_by_id(&mut self, patient_id: i64) -> Result<()> {
         match db::get_patient(patient_id) {
             Ok(patient) => {
@@ -165,14 +140,12 @@ impl UpdatePatient {
                 Ok(())
             }
             Err(_) => {
-                // Show a user-friendly error message instead of the technical error
                 self.set_error(format!("Patient with ID {} doesn't exist", patient_id));
                 Err(anyhow::anyhow!("Patient not found"))
             }
         }
     }
 
-    /// Load patient data based on the ID input field
     fn load_patient(&mut self) -> Result<()> {
         if !self.loaded {
             if let Ok(patient_id) = self.patient_id_input.parse::<i64>() {
@@ -189,7 +162,6 @@ impl UpdatePatient {
         }
     }
 
-    /// Load the currently selected patient from the table
     fn load_selected_patient(&mut self) -> Result<()> {
         if let Some(selected) = self.table_state.selected() {
             if selected < self.filtered_patients.len() {
@@ -202,7 +174,6 @@ impl UpdatePatient {
         Err(anyhow::anyhow!("No patient selected"))
     }
 
-    /// Update the input value based on the currently selected field
     fn update_input_value(&mut self) {
         if !self.loaded {
             self.input_value = self.patient_id_input.clone();
@@ -231,7 +202,6 @@ impl UpdatePatient {
         }
     }
 
-    /// Apply the edited value to the selected field in the patient data
     fn apply_edited_value(&mut self) {
         if !self.editing || !self.loaded {
             return;
@@ -265,26 +235,23 @@ impl UpdatePatient {
         self.editing = false;
     }
 
-    /// Show a confirmation dialog before performing an action
     fn show_confirmation(&mut self, message: String, action: ConfirmAction) {
         self.show_confirmation = true;
         self.confirmation_message = message;
         self.confirmed_action = Some(action);
-        self.confirmation_selected = 0; // Default Yes
+        self.confirmation_selected = 0;
     }
 
-    /// Update the patient in the database
     fn update_patient(&mut self) -> Result<()> {
         match db::update_patient(&self.patient) {
             Ok(_) => {
                 self.success_message = Some("Patient updated successfully!".to_string());
                 self.success_timer = Some(Instant::now());
 
-                // Refresh the patients list
                 if let Ok(patients) = db::get_all_patients() {
                     self.all_patients = patients.clone();
                     self.filtered_patients = patients;
-                    self.filter_patients(); // Re-apply any active search filter
+                    self.filter_patients();
                 }
 
                 Ok(())
@@ -296,7 +263,6 @@ impl UpdatePatient {
         }
     }
 
-    /// Reset to patient selection state
     fn back_to_selection(&mut self) {
         self.update_state = UpdateState::SelectingPatient;
         self.loaded = false;
@@ -306,19 +272,9 @@ impl UpdatePatient {
         self.clear_success();
     }
 
-    /// Handle input events for the component
-    ///
-    /// # Arguments
-    /// * `key` - The keyboard event to handle
-    ///
-    /// # Returns
-    /// * `Ok(Some(PatientAction))` - If the app should change screens
-    /// * `Ok(None)` - If no app-level action is needed
-    /// * `Err` - If an error occurred
     fn handle_input(&mut self, key: KeyEvent) -> Result<Option<PatientAction>> {
         self.check_timeouts();
 
-        // Handle confirmation dialog if it's shown
         if self.show_confirmation {
             match key.code {
                 KeyCode::Left | KeyCode::Right => {
@@ -342,7 +298,6 @@ impl UpdatePatient {
             return Ok(None);
         }
 
-        // If we're editing, handle the input differently
         if self.editing {
             match key.code {
                 KeyCode::Char(c) => {
@@ -355,7 +310,6 @@ impl UpdatePatient {
                     self.apply_edited_value();
                 }
                 KeyCode::Esc => {
-                    // Cancel editing
                     self.editing = false;
                     self.update_input_value();
                 }
@@ -364,10 +318,8 @@ impl UpdatePatient {
             return Ok(None);
         }
 
-        // Patient selection state
         if matches!(self.update_state, UpdateState::SelectingPatient) {
             match key.code {
-                // Search mode handling
                 KeyCode::Char(c) if self.is_searching => {
                     self.search_input.push(c);
                     self.filter_patients();
@@ -379,25 +331,21 @@ impl UpdatePatient {
                     self.clear_error();
                 }
                 KeyCode::Down if self.is_searching && !self.filtered_patients.is_empty() => {
-                    // Move from search to results
                     self.is_searching = false;
                     self.table_state.select(Some(0));
                 }
                 KeyCode::Esc if self.is_searching => {
-                    // Cancel search
                     self.is_searching = false;
                     self.search_input.clear();
                     self.filter_patients();
                 }
 
-                // Search activation keys
                 KeyCode::Char('/') | KeyCode::Char('s') | KeyCode::Char('S')
                     if !self.is_searching =>
                 {
                     self.is_searching = true;
                 }
 
-                // ID input handling (when not searching)
                 KeyCode::Char(c) if !self.is_searching => {
                     self.patient_id_input.push(c);
                     self.input_value = self.patient_id_input.clone();
@@ -409,7 +357,6 @@ impl UpdatePatient {
                     self.clear_error();
                 }
 
-                // Navigation in results (when not searching)
                 KeyCode::Up if !self.is_searching => {
                     let selected = self.table_state.selected().unwrap_or(0);
                     if selected > 0 {
@@ -423,16 +370,13 @@ impl UpdatePatient {
                     }
                 }
 
-                // Selection handling
                 KeyCode::Enter => {
                     if self.is_searching {
-                        // If in search, pressing enter moves to results
                         if !self.filtered_patients.is_empty() {
                             self.is_searching = false;
                             self.table_state.select(Some(0));
                         }
                     } else {
-                        // Try loading the patient from ID input or selected row
                         if !self.patient_id_input.is_empty() {
                             let _ = self.load_patient();
                         } else if !self.filtered_patients.is_empty() {
@@ -441,7 +385,6 @@ impl UpdatePatient {
                     }
                 }
 
-                // Exit
                 KeyCode::Esc if !self.is_searching => {
                     return Ok(Some(PatientAction::BackToHome));
                 }
@@ -450,7 +393,6 @@ impl UpdatePatient {
             return Ok(None);
         }
 
-        // Patient editing state
         match key.code {
             KeyCode::Up => {
                 if let Some(selected) = self.selected_field {
@@ -471,24 +413,20 @@ impl UpdatePatient {
                 }
             }
             KeyCode::Enter => {
-                // Start editing the selected field
                 self.editing = true;
             }
             KeyCode::Char('s') | KeyCode::Char('S')
                 if key.modifiers.contains(KeyModifiers::CONTROL) =>
             {
-                // Save (update) patient with confirmation
                 self.show_confirmation(
                     "Are you sure you want to update this patient?".to_string(),
                     ConfirmAction::UpdatePatient,
                 );
             }
             KeyCode::Char('e') | KeyCode::Char('E') => {
-                // Edit the selected field
                 self.editing = true;
             }
             KeyCode::Esc => {
-                // Go back to patient selection
                 self.back_to_selection();
                 return Ok(None);
             }
@@ -498,25 +436,21 @@ impl UpdatePatient {
         Ok(None)
     }
 
-    /// Clear error message and timer
     fn clear_error(&mut self) {
         self.error_message = None;
         self.error_timer = None;
     }
 
-    /// Set an error message with a timeout
     fn set_error(&mut self, message: String) {
         self.error_message = Some(message);
         self.error_timer = Some(Instant::now());
     }
 
-    /// Clear success message and timer
     fn clear_success(&mut self) {
         self.success_message = None;
         self.success_timer = None;
     }
 
-    /// Check if the success message should be cleared due to timeout
     fn check_success_timeout(&mut self) {
         if let Some(timer) = self.success_timer {
             if timer.elapsed() > Duration::from_secs(5) {
@@ -525,7 +459,6 @@ impl UpdatePatient {
         }
     }
 
-    /// Check if the error message should be cleared due to timeout
     fn check_error_timeout(&mut self) {
         if let Some(timer) = self.error_timer {
             if timer.elapsed() > Duration::from_secs(5) {
@@ -534,7 +467,6 @@ impl UpdatePatient {
         }
     }
 
-    /// Check both error and success message timeouts
     fn check_timeouts(&mut self) {
         self.check_error_timeout();
         self.check_success_timeout();
@@ -542,24 +474,12 @@ impl UpdatePatient {
 }
 
 impl Default for UpdatePatient {
-    /// Creates a default instance of the UpdatePatient component.
     fn default() -> Self {
         Self::new()
     }
 }
 
 impl Component for UpdatePatient {
-    /// Handles input events at the component level.
-    ///
-    /// Delegates to the component's own input handler.
-    ///
-    /// # Arguments
-    /// * `event` - The keyboard event to process
-    ///
-    /// # Returns
-    /// * `Ok(Some(SelectedApp))` - If the app should change screens
-    /// * `Ok(None)` - If no app-level action is needed
-    /// * `Err` - If an error occurred
     fn handle_input(&mut self, event: KeyEvent) -> Result<Option<SelectedApp>> {
         match self.handle_input(event)? {
             Some(PatientAction::BackToHome) => Ok(Some(crate::app::SelectedApp::None)),
@@ -568,10 +488,6 @@ impl Component for UpdatePatient {
         }
     }
 
-    /// Renders the update patients component to the frame.
-    ///
-    /// # Arguments
-    /// * `frame` - The frame to render the component on
     fn render(&self, frame: &mut Frame) {
         let area = frame.area();
         frame.render_widget(
@@ -584,7 +500,6 @@ impl Component for UpdatePatient {
             UpdateState::EditingPatient => self.render_patient_editing(frame, area),
         }
 
-        // Render confirmation dialog if needed
         if self.show_confirmation {
             self.render_confirmation_dialog(frame, area);
         }
@@ -592,22 +507,20 @@ impl Component for UpdatePatient {
 }
 
 impl UpdatePatient {
-    /// Render the patient selection screen with table of patients
     fn render_patient_selection(&self, frame: &mut Frame, area: Rect) {
         let main_layout = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(3), // Header
-                Constraint::Length(3), // Search input
-                Constraint::Length(3), // Patient ID Input
-                Constraint::Min(10),   // Patient selection table
-                Constraint::Length(1), // Error/Success message
-                Constraint::Length(2), // Help text
+                Constraint::Length(3),
+                Constraint::Length(3),
+                Constraint::Length(3),
+                Constraint::Min(10),
+                Constraint::Length(1),
+                Constraint::Length(2),
             ])
             .margin(1)
             .split(area);
 
-        // Header
         let header_block = Block::default()
             .borders(Borders::BOTTOM)
             .border_style(Style::default().fg(Color::Rgb(75, 75, 120)))
@@ -624,7 +537,6 @@ impl UpdatePatient {
             .alignment(Alignment::Center);
         frame.render_widget(title, main_layout[0]);
 
-        // Search input field
         let search_block = Block::default()
             .borders(Borders::ALL)
             .border_type(BorderType::Rounded)
@@ -635,7 +547,7 @@ impl UpdatePatient {
                     .add_modifier(Modifier::BOLD),
             ))
             .border_style(if self.is_searching {
-                Style::default().fg(Color::Rgb(250, 250, 110)) // Yellow when active
+                Style::default().fg(Color::Rgb(250, 250, 110))
             } else {
                 Style::default().fg(Color::Rgb(140, 140, 200))
             })
@@ -650,7 +562,6 @@ impl UpdatePatient {
             .block(search_block);
         frame.render_widget(search_paragraph, main_layout[1]);
 
-        // ID input field
         let id_input_block = Block::default()
             .borders(Borders::ALL)
             .border_type(BorderType::Rounded)
@@ -661,7 +572,7 @@ impl UpdatePatient {
                     .add_modifier(Modifier::BOLD),
             ))
             .border_style(if !self.is_searching {
-                Style::default().fg(Color::Rgb(250, 250, 110)) // Yellow when active
+                Style::default().fg(Color::Rgb(250, 250, 110))
             } else {
                 Style::default().fg(Color::Rgb(140, 140, 200))
             })
@@ -676,7 +587,6 @@ impl UpdatePatient {
             .block(id_input_block);
         frame.render_widget(id_input_paragraph, main_layout[2]);
 
-        // Patient selection table
         if self.filtered_patients.is_empty() {
             let no_patients = Paragraph::new(if self.search_input.is_empty() {
                 "No patients found in database"
@@ -745,7 +655,6 @@ impl UpdatePatient {
             );
         }
 
-        // Error or success message
         if let Some(error) = &self.error_message {
             let error_paragraph = Paragraph::new(error.as_str())
                 .style(
@@ -766,7 +675,6 @@ impl UpdatePatient {
             frame.render_widget(success_paragraph, main_layout[4]);
         }
 
-        // Help text
         let help_text = if self.is_searching {
             "Type to search | ↓: To results | Esc: Cancel search"
         } else {
@@ -779,21 +687,19 @@ impl UpdatePatient {
         frame.render_widget(help_paragraph, main_layout[5]);
     }
 
-    /// Render the patient editing screen with data table and input field
     fn render_patient_editing(&self, frame: &mut Frame, area: Rect) {
         let main_layout = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(3), // Header
-                Constraint::Min(14),   // Table
-                Constraint::Length(3), // Input field
-                Constraint::Length(1), // Error/Success message
-                Constraint::Length(2), // Help text
+                Constraint::Length(3),
+                Constraint::Min(14),
+                Constraint::Length(3),
+                Constraint::Length(1),
+                Constraint::Length(2),
             ])
             .margin(1)
             .split(area);
 
-        // Header
         let header_block = Block::default()
             .borders(Borders::BOTTOM)
             .border_style(Style::default().fg(Color::Rgb(75, 75, 120)))
@@ -816,8 +722,6 @@ impl UpdatePatient {
             .alignment(Alignment::Center);
         frame.render_widget(title, main_layout[0]);
 
-        // Patient data table
-        // First create the string values to avoid temporary value issues
         let id_str = self.patient.id.to_string();
         let gender_str = match self.patient.gender {
             Gender::Male => "Male",
@@ -908,7 +812,6 @@ impl UpdatePatient {
 
         frame.render_stateful_widget(table, main_layout[1], &mut self.edit_table_state.clone());
 
-        // Input field for editing
         let input_label = match self.selected_field {
             Some(ID_INPUT) => "ID",
             Some(FIRST_NAME_INPUT) => "First Name",
@@ -933,7 +836,7 @@ impl UpdatePatient {
                 input_label
             ))
             .border_style(if self.editing {
-                Style::default().fg(Color::Rgb(140, 219, 140)) // Green when editing
+                Style::default().fg(Color::Rgb(140, 219, 140))
             } else {
                 Style::default().fg(Color::Rgb(140, 140, 200))
             })
@@ -948,7 +851,6 @@ impl UpdatePatient {
             .block(input_block);
         frame.render_widget(input_paragraph, main_layout[2]);
 
-        // Error or success message
         if let Some(error) = &self.error_message {
             let error_paragraph = Paragraph::new(error.as_str())
                 .style(
@@ -969,7 +871,6 @@ impl UpdatePatient {
             frame.render_widget(success_paragraph, main_layout[3]);
         }
 
-        // Help text with shortcut keys
         let help_text = if self.editing {
             "Enter: Save Changes | Esc: Cancel Editing"
         } else {
@@ -982,7 +883,6 @@ impl UpdatePatient {
         frame.render_widget(help_paragraph, main_layout[4]);
     }
 
-    /// Render the confirmation dialog for actions like save.
     fn render_confirmation_dialog(&self, frame: &mut Frame, area: Rect) {
         let dialog_width = 50;
         let dialog_height = 8;
@@ -993,7 +893,6 @@ impl UpdatePatient {
             dialog_height,
         );
 
-        // Clear just the dialog area
         frame.render_widget(Clear, dialog_area);
 
         let dialog_block = Block::default()
@@ -1017,7 +916,7 @@ impl UpdatePatient {
             .constraints([Constraint::Length(2), Constraint::Length(2)])
             .split(inner_area);
 
-        let message = Paragraph::new(self.confirmation_message.as_str()) // Use the message
+        let message = Paragraph::new(self.confirmation_message.as_str())
             .style(Style::default().fg(Color::Rgb(220, 220, 240)))
             .add_modifier(Modifier::BOLD)
             .alignment(Alignment::Center);

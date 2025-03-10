@@ -1,5 +1,3 @@
-//! Registration component for Rustoria.
-
 use crate::app::SelectedApp;
 use crate::components::Component;
 use crate::tui::Frame;
@@ -11,27 +9,18 @@ use ratatui::{
 };
 use std::time::{Duration, Instant};
 
-/// Represents the registration UI component.
 #[derive(Debug, Default)]
 pub struct Register {
-    /// The username input field.
     pub username: String,
-    /// The password input field.
     pub password: String,
-    /// The confirm password input field.
     pub confirm_password: String,
-    /// Flag to track which input field has focus (0: username, 1: password, 2: confirm, 3: Back)
     focus_index: usize,
-    /// Optional error message to display.
     pub error_message: Option<String>,
-    /// Time when the error message was last shown.
     error_message_time: Option<Instant>,
-    /// Flag to indicate successful registration (for displaying a message)
     pub registration_success: bool,
 }
 
 impl Register {
-    /// Creates a new `Register` component.
     pub fn new() -> Self {
         Self::default()
     }
@@ -45,8 +34,8 @@ impl Register {
                     2 => self.confirm_password.push(c),
                     _ => {}
                 }
-                self.clear_error_message(); // Clear error on any input
-                self.registration_success = false; // Clear success message
+                self.clear_error_message();
+                self.registration_success = false;
             }
             KeyCode::Backspace => {
                 match self.focus_index {
@@ -59,42 +48,36 @@ impl Register {
                 self.registration_success = false;
             }
             KeyCode::Tab | KeyCode::Down => {
-                self.focus_index = (self.focus_index + 1) % 4; // 4 options now
+                self.focus_index = (self.focus_index + 1) % 4;
             }
             KeyCode::Up => {
-                self.focus_index = (self.focus_index + 3) % 4; // 4 options
+                self.focus_index = (self.focus_index + 3) % 4;
             }
             KeyCode::Enter => {
                 if self.focus_index == 3 {
-                    // Back to Login selected
                     return Ok(true);
                 }
-                //  Removed extra `return Ok(true);` -  Unnecessary, handled below
-                // Return true to signal registration attempt (if not back).
+
                 return Ok(true);
             }
             KeyCode::Esc => {
-                // ESC key pressed - go back to login
-                return Ok(true); // Return true to signal we want to go back
+                return Ok(true);
             }
             _ => {}
         }
         Ok(false)
     }
 
-    /// Clears the error message and resets the timer.
     fn clear_error_message(&mut self) {
         self.error_message = None;
         self.error_message_time = None;
     }
 
-    /// Updates the error message and sets the timer.
     fn set_error_message(&mut self, message: String) {
         self.error_message = Some(message);
         self.error_message_time = Some(Instant::now());
     }
 
-    /// Checks if the error message should be hidden (timeout).
     pub fn check_error_timeout(&mut self) {
         if let Some(time) = self.error_message_time {
             if time.elapsed() >= Duration::from_secs(5) {
@@ -104,7 +87,6 @@ impl Register {
     }
 }
 
-/// Helper function to create a centered rect using up certain percentage of the available rect
 fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
     let popup_layout = Layout::default()
         .direction(Direction::Vertical)
@@ -127,43 +109,36 @@ fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
 
 impl Component for Register {
     fn handle_input(&mut self, event: KeyEvent) -> Result<Option<crate::app::SelectedApp>> {
-        self.check_error_timeout(); // Check for timeout
+        self.check_error_timeout();
 
-        // Handle input and return early if it's the "Back" button.
         if self.handle_register_input(event)? {
             if self.focus_index == 3 || event.code == KeyCode::Esc {
-                return Ok(Some(SelectedApp::None)); // Back to login
+                return Ok(Some(SelectedApp::None));
             } else {
-                // Validate fields *before* database call
                 if self.username.is_empty() {
                     self.set_error_message("Username cannot be empty.".to_string());
-                    return Ok(None); // Return early on error
+                    return Ok(None);
                 }
                 if self.password.is_empty() {
                     self.set_error_message("Password cannot be empty.".to_string());
-                    return Ok(None); // Return early on error
+                    return Ok(None);
                 }
                 if self.password != self.confirm_password {
                     self.set_error_message("Passwords do not match.".to_string());
-                    return Ok(None); // Return early on error
+                    return Ok(None);
                 }
 
-                // Attempt registration (delegated to db module)
                 match crate::db::create_user(&self.username, &self.password) {
                     Ok(_) => {
-                        // Successful registration
-                        self.registration_success = true; // Set success flag
+                        self.registration_success = true;
 
-                        // Optionally: Clear fields on success (good UX)
                         self.username.clear();
                         self.password.clear();
                         self.confirm_password.clear();
                         return Ok(Some(SelectedApp::None));
                     }
                     Err(err) => {
-                        // Display error message
                         self.set_error_message(format!("{}", err));
-                        //  Crucially, we now `return Ok(None)` after setting the error.
                         return Ok(None);
                     }
                 }
@@ -173,13 +148,11 @@ impl Component for Register {
     }
 
     fn render(&self, frame: &mut Frame) {
-        // Set the global background color to match the home page
         frame.render_widget(
             Block::default().style(Style::default().bg(Color::Rgb(16, 16, 28))),
             frame.area(),
         );
 
-        // Render a background container for the entire form
         let form_container = centered_rect(70, 70, frame.area());
         let container_block = Block::default()
             .borders(Borders::ALL)
@@ -189,29 +162,27 @@ impl Component for Register {
 
         frame.render_widget(container_block.clone(), form_container);
 
-        // Create layout within the form container
         let vertical_layout = Layout::default()
             .direction(Direction::Vertical)
             .constraints(
                 [
-                    Constraint::Length(2), // Title
-                    Constraint::Length(1), // Spacing
-                    Constraint::Length(3), // Username
-                    Constraint::Length(1), // Spacing
-                    Constraint::Length(3), // Password
-                    Constraint::Length(1), // Spacing
-                    Constraint::Length(3), // Confirm Password
-                    Constraint::Length(2), // Error/Success Message
-                    Constraint::Length(2), // Back to Login
-                    Constraint::Length(1), // Help text
-                    Constraint::Min(0),    // Remaining space
+                    Constraint::Length(2),
+                    Constraint::Length(1),
+                    Constraint::Length(3),
+                    Constraint::Length(1),
+                    Constraint::Length(3),
+                    Constraint::Length(1),
+                    Constraint::Length(3),
+                    Constraint::Length(2),
+                    Constraint::Length(2),
+                    Constraint::Length(1),
+                    Constraint::Min(0),
                 ]
                 .as_ref(),
             )
             .margin(2)
             .split(container_block.inner(form_container));
 
-        // --- Title ---
         let title = Paragraph::new("Create Account")
             .style(
                 Style::default()
@@ -221,7 +192,6 @@ impl Component for Register {
             .alignment(Alignment::Center);
         frame.render_widget(title, vertical_layout[0]);
 
-        // --- Username ---
         let username_block = Block::default()
             .borders(Borders::ALL)
             .border_type(BorderType::Rounded)
@@ -232,7 +202,7 @@ impl Component for Register {
                     .add_modifier(Modifier::BOLD),
             )
             .border_style(if self.focus_index == 0 {
-                Style::default().fg(Color::Rgb(250, 250, 110)) // Yellow highlight when selected
+                Style::default().fg(Color::Rgb(250, 250, 110))
             } else {
                 Style::default().fg(Color::Rgb(140, 140, 200))
             })
@@ -244,7 +214,6 @@ impl Component for Register {
             .alignment(Alignment::Left);
         frame.render_widget(username_input, vertical_layout[2]);
 
-        // --- Password ---
         let password_block = Block::default()
             .borders(Borders::ALL)
             .border_type(BorderType::Rounded)
@@ -255,7 +224,7 @@ impl Component for Register {
                     .add_modifier(Modifier::BOLD),
             )
             .border_style(if self.focus_index == 1 {
-                Style::default().fg(Color::Rgb(250, 250, 110)) // Yellow highlight when selected
+                Style::default().fg(Color::Rgb(250, 250, 110))
             } else {
                 Style::default().fg(Color::Rgb(140, 140, 200))
             })
@@ -267,7 +236,6 @@ impl Component for Register {
             .alignment(Alignment::Left);
         frame.render_widget(password_input, vertical_layout[4]);
 
-        // --- Confirm Password ---
         let confirm_password_block = Block::default()
             .borders(Borders::ALL)
             .border_type(BorderType::Rounded)
@@ -278,7 +246,7 @@ impl Component for Register {
                     .add_modifier(Modifier::BOLD),
             )
             .border_style(if self.focus_index == 2 {
-                Style::default().fg(Color::Rgb(250, 250, 110)) // Yellow highlight when selected
+                Style::default().fg(Color::Rgb(250, 250, 110))
             } else {
                 Style::default().fg(Color::Rgb(140, 140, 200))
             })
@@ -290,7 +258,6 @@ impl Component for Register {
             .alignment(Alignment::Left);
         frame.render_widget(confirm_password_input, vertical_layout[6]);
 
-        // --- Messages (Error or Success) ---
         if let Some(error) = &self.error_message {
             let error_paragraph = Paragraph::new(error.as_str())
                 .style(
@@ -312,7 +279,6 @@ impl Component for Register {
             frame.render_widget(success_paragraph, vertical_layout[7]);
         }
 
-        // --- Back to Login Text ---
         let back_style = if self.focus_index == 3 {
             Style::default()
                 .fg(Color::Rgb(129, 199, 245))
@@ -330,7 +296,6 @@ impl Component for Register {
         .alignment(Alignment::Center);
         frame.render_widget(back_to_login_text, vertical_layout[8]);
 
-        // --- Help Text ---
         let help_text =
             Paragraph::new("TAB/Arrow Keys: Navigate | ENTER: Select | ESC: Back to Login")
                 .style(Style::default().fg(Color::Rgb(140, 140, 170)))

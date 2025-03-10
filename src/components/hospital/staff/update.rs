@@ -1,9 +1,3 @@
-//! Update Staff component for the Hospital application.
-//!
-//! Provides a UI for selecting and updating staff details. It has two main states:
-//! 1. Staff Selection - Shows a table of staff and an ID input field
-//! 2. Staff Editing - Shows staff details in a table with an editor below
-
 use crate::app::SelectedApp;
 use crate::components::Component;
 use crate::db;
@@ -14,77 +8,66 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::{prelude::*, widgets::*};
 use std::time::{Duration, Instant};
 
-/// Enum for confirmation dialog actions.
 enum ConfirmAction {
     UpdateStaff,
 }
 
-/// Component states to manage the UI flow.
 enum UpdateState {
-    /// Initial state showing a list of staff to select from.
     SelectingStaff,
-    /// After selection, shows editable fields for the staff member.
     EditingStaff,
 }
-
-/// Component to update an existing staff member's information.
 pub struct UpdateStaff {
-    all_staff: Vec<StaffMember>,      // All staff for selection table
-    filtered_staff: Vec<StaffMember>, // Filtered staff based on search
-    search_input: String,             // Search input text
-    is_searching: bool,               // Whether user is currently typing in search box
-    table_state: TableState,          // Track which row in the selection table is selected
-    update_state: UpdateState,        // Current component state
-    staff_id_input: String,           // Input for staff ID
-    staff: StaffMember,               // The staff data being updated
-    loaded: bool,                     // Flag: Has the initial staff data been loaded?
-    selected_field: Option<usize>,    // Currently selected field
-    edit_table_state: TableState,     // State for the editing table
-    input_value: String,              // Current value being edited
-    editing: bool,                    // Whether we're currently editing a value
+    all_staff: Vec<StaffMember>,
+    filtered_staff: Vec<StaffMember>,
+    search_input: String,
+    is_searching: bool,
+    table_state: TableState,
+    update_state: UpdateState,
+    staff_id_input: String,
+    staff: StaffMember,
+    loaded: bool,
+    selected_field: Option<usize>,
+    edit_table_state: TableState,
+    input_value: String,
+    editing: bool,
     error_message: Option<String>,
     error_timer: Option<Instant>,
     success_message: Option<String>,
     success_timer: Option<Instant>,
-    show_confirmation: bool,      // Whether to show confirmation dialog
-    confirmation_message: String, // Message in the confirmation dialog
-    confirmed_action: Option<ConfirmAction>, // Action to perform if confirmed
-    confirmation_selected: usize, // Which confirmation button is selected (0 for Yes, 1 for No)
+    show_confirmation: bool,
+    confirmation_message: String,
+    confirmed_action: Option<ConfirmAction>,
+    confirmation_selected: usize,
 }
 
-// Field constants
 const ID_INPUT: usize = 0;
 const NAME_INPUT: usize = 1;
 const ROLE_INPUT: usize = 2;
 const PHONE_INPUT: usize = 3;
 const EMAIL_INPUT: usize = 4;
 const ADDRESS_INPUT: usize = 5;
-const INPUT_FIELDS: usize = 5; // Corrected: This should be 5, as there are 6 fields (0-5)
+const INPUT_FIELDS: usize = 5;
 
 impl UpdateStaff {
-    /// Creates a new `UpdateStaff` component.
-    ///
-    /// Initializes the component with the staff selection view.
     pub fn new() -> Self {
         let mut selection_state = TableState::default();
-        selection_state.select(Some(0)); // Start with the first row selected
+        selection_state.select(Some(0));
 
         let mut edit_table_state = TableState::default();
         edit_table_state.select(Some(0));
 
         Self {
-            all_staff: Vec::new(),      // Initialize as empty, data loaded by fetch_staff()
-            filtered_staff: Vec::new(), // Initialize as empty
+            all_staff: Vec::new(),
+            filtered_staff: Vec::new(),
             search_input: String::new(),
             is_searching: false,
             table_state: selection_state,
             update_state: UpdateState::SelectingStaff,
             staff_id_input: String::new(),
             staff: StaffMember {
-                // Correct: Ensure staff has a default state
                 id: 0,
                 name: String::new(),
-                role: StaffRole::Doctor, // Or any other default
+                role: StaffRole::Doctor,
                 phone_number: String::new(),
                 email: None,
                 address: String::new(),
@@ -101,24 +84,18 @@ impl UpdateStaff {
             show_confirmation: false,
             confirmation_message: String::new(),
             confirmed_action: None,
-            confirmation_selected: 0, // Default to "Yes"
+            confirmation_selected: 0,
         }
     }
 
-    /// Fetches all staff from the database.
-    ///
-    /// This method should be called when the component is first displayed
-    /// or when the staff list needs to be refreshed.
     pub fn fetch_staff(&mut self) -> Result<()> {
         self.all_staff = db::get_all_staff()?;
-        self.filter_staff(); // Apply filtering after loading.
+        self.filter_staff();
         Ok(())
     }
 
-    /// Filters staff based on the search term.
     fn filter_staff(&mut self) {
         if self.search_input.is_empty() {
-            // If search is empty, show all staff
             self.filtered_staff = self.all_staff.clone();
         } else {
             let search_term = self.search_input.to_lowercase();
@@ -126,7 +103,6 @@ impl UpdateStaff {
                 .all_staff
                 .iter()
                 .filter(|s| {
-                    // Case-insensitive search in multiple fields
                     s.name.to_lowercase().contains(&search_term)
                         || s.id.to_string().contains(&search_term)
                         || s.phone_number.to_lowercase().contains(&search_term)
@@ -135,7 +111,6 @@ impl UpdateStaff {
                 .collect();
         }
 
-        // Reset selection if it's now out of bounds
         if let Some(selected) = self.table_state.selected() {
             if selected >= self.filtered_staff.len() && !self.filtered_staff.is_empty() {
                 self.table_state.select(Some(0));
@@ -143,9 +118,6 @@ impl UpdateStaff {
         }
     }
 
-    /// Loads staff data by ID from the database.
-    ///
-    /// Transitions to editing mode if the staff member is found.
     fn load_staff_by_id(&mut self, staff_id: i64) -> Result<()> {
         match db::get_staff(staff_id) {
             Ok(staff) => {
@@ -156,14 +128,12 @@ impl UpdateStaff {
                 Ok(())
             }
             Err(_) => {
-                // Show a user-friendly error message
                 self.set_error(format!("Staff with ID {} doesn't exist", staff_id));
                 Err(anyhow::anyhow!("Staff not found"))
             }
         }
     }
 
-    /// Loads staff data based on the ID input field.
     fn load_staff(&mut self) -> Result<()> {
         if !self.loaded {
             if let Ok(staff_id) = self.staff_id_input.parse::<i64>() {
@@ -180,7 +150,6 @@ impl UpdateStaff {
         }
     }
 
-    /// Loads the currently selected staff member from the table.
     fn load_selected_staff(&mut self) -> Result<()> {
         if let Some(selected) = self.table_state.selected() {
             if selected < self.filtered_staff.len() {
@@ -193,7 +162,6 @@ impl UpdateStaff {
         Err(anyhow::anyhow!("No staff selected"))
     }
 
-    /// Updates the input value based on the currently selected field.
     fn update_input_value(&mut self) {
         if !self.loaded {
             self.input_value = self.staff_id_input.clone();
@@ -218,7 +186,6 @@ impl UpdateStaff {
         }
     }
 
-    /// Applies the edited value to the selected field in the staff data.
     fn apply_edited_value(&mut self) {
         if !self.editing || !self.loaded {
             return;
@@ -233,7 +200,7 @@ impl UpdateStaff {
                         "nurse" | "n" => StaffRole::Nurse,
                         "admin" | "a" => StaffRole::Admin,
                         "technician" | "t" => StaffRole::Technician,
-                        _ => StaffRole::Doctor, // Default to Doctor
+                        _ => StaffRole::Doctor,
                     }
                 }
                 PHONE_INPUT => self.staff.phone_number = self.input_value.clone(),
@@ -245,26 +212,23 @@ impl UpdateStaff {
         self.editing = false;
     }
 
-    /// Shows a confirmation dialog before performing an action.
     fn show_confirmation(&mut self, message: String, action: ConfirmAction) {
         self.show_confirmation = true;
         self.confirmation_message = message;
         self.confirmed_action = Some(action);
-        self.confirmation_selected = 0; // Default Yes
+        self.confirmation_selected = 0;
     }
 
-    /// Updates the staff member in the database.
     fn update_staff(&mut self) -> Result<()> {
         match db::update_staff_member(&self.staff) {
             Ok(_) => {
                 self.success_message = Some("Staff updated successfully!".to_string());
                 self.success_timer = Some(Instant::now());
 
-                // Refresh the staff list
                 if let Ok(staff) = db::get_all_staff() {
                     self.all_staff = staff.clone();
                     self.filtered_staff = staff;
-                    self.filter_staff(); // Re-apply any active search filter
+                    self.filter_staff();
                 }
 
                 Ok(())
@@ -276,7 +240,6 @@ impl UpdateStaff {
         }
     }
 
-    /// Resets to staff selection state.
     fn back_to_selection(&mut self) {
         self.update_state = UpdateState::SelectingStaff;
         self.loaded = false;
@@ -286,11 +249,9 @@ impl UpdateStaff {
         self.clear_success();
     }
 
-    /// Handles input events for the component.
     fn handle_input(&mut self, key: KeyEvent) -> Result<Option<SelectedApp>> {
         self.check_timeouts();
 
-        // Handle confirmation dialog if it's shown
         if self.show_confirmation {
             match key.code {
                 KeyCode::Left | KeyCode::Right => {
@@ -314,7 +275,6 @@ impl UpdateStaff {
             return Ok(None);
         }
 
-        // If we're editing, handle the input differently
         if self.editing {
             match key.code {
                 KeyCode::Char(c) => {
@@ -327,7 +287,6 @@ impl UpdateStaff {
                     self.apply_edited_value();
                 }
                 KeyCode::Esc => {
-                    // Cancel editing
                     self.editing = false;
                     self.update_input_value();
                 }
@@ -336,10 +295,8 @@ impl UpdateStaff {
             return Ok(None);
         }
 
-        // Staff selection state
         if matches!(self.update_state, UpdateState::SelectingStaff) {
             match key.code {
-                // Search mode handling
                 KeyCode::Char(c) if self.is_searching => {
                     self.search_input.push(c);
                     self.filter_staff();
@@ -351,25 +308,20 @@ impl UpdateStaff {
                     self.clear_error();
                 }
                 KeyCode::Down if self.is_searching && !self.filtered_staff.is_empty() => {
-                    // Move from search to results
                     self.is_searching = false;
                     self.table_state.select(Some(0));
                 }
                 KeyCode::Esc if self.is_searching => {
-                    // Cancel search
                     self.is_searching = false;
                     self.search_input.clear();
                     self.filter_staff();
                 }
 
-                // Search activation keys
                 KeyCode::Char('/') | KeyCode::Char('s') | KeyCode::Char('S')
                     if !self.is_searching =>
                 {
                     self.is_searching = true;
                 }
-
-                // ID input handling (when not searching)
                 KeyCode::Char(c) if !self.is_searching => {
                     self.staff_id_input.push(c);
                     self.input_value = self.staff_id_input.clone();
@@ -380,8 +332,6 @@ impl UpdateStaff {
                     self.input_value = self.staff_id_input.clone();
                     self.clear_error();
                 }
-
-                // Navigation in results (when not searching)
                 KeyCode::Up if !self.is_searching => {
                     let selected = self.table_state.selected().unwrap_or(0);
                     if selected > 0 {
@@ -394,17 +344,13 @@ impl UpdateStaff {
                         self.table_state.select(Some(selected + 1));
                     }
                 }
-
-                // Selection handling
                 KeyCode::Enter => {
                     if self.is_searching {
-                        // If in search, pressing enter moves to results
                         if !self.filtered_staff.is_empty() {
                             self.is_searching = false;
                             self.table_state.select(Some(0));
                         }
                     } else {
-                        // Try loading the staff from ID input or selected row
                         if !self.staff_id_input.is_empty() {
                             let _ = self.load_staff();
                         } else if !self.filtered_staff.is_empty() {
@@ -412,8 +358,6 @@ impl UpdateStaff {
                         }
                     }
                 }
-
-                // Exit
                 KeyCode::Esc => {
                     return Ok(Some(SelectedApp::None));
                 }
@@ -422,7 +366,6 @@ impl UpdateStaff {
             return Ok(None);
         }
 
-        // Staff editing state
         match key.code {
             KeyCode::Up => {
                 if let Some(selected) = self.selected_field {
@@ -443,24 +386,20 @@ impl UpdateStaff {
                 }
             }
             KeyCode::Enter => {
-                // Start editing the selected field
                 self.editing = true;
             }
             KeyCode::Char('s') | KeyCode::Char('S')
                 if key.modifiers.contains(KeyModifiers::CONTROL) =>
             {
-                // Save (update) staff with confirmation
                 self.show_confirmation(
                     "Are you sure you want to update this staff member? (y/n)".to_string(),
                     ConfirmAction::UpdateStaff,
                 );
             }
             KeyCode::Char('e') | KeyCode::Char('E') => {
-                // Edit the selected field
                 self.editing = true;
             }
             KeyCode::Esc => {
-                // Go back to staff selection
                 self.back_to_selection();
                 return Ok(None);
             }
@@ -470,25 +409,21 @@ impl UpdateStaff {
         Ok(None)
     }
 
-    /// Clears error message and timer.
     fn clear_error(&mut self) {
         self.error_message = None;
         self.error_timer = None;
     }
 
-    /// Sets an error message with a timeout.
     fn set_error(&mut self, message: String) {
         self.error_message = Some(message);
         self.error_timer = Some(Instant::now());
     }
 
-    /// Clears success message and timer.
     fn clear_success(&mut self) {
         self.success_message = None;
         self.success_timer = None;
     }
 
-    /// Checks if the success message should be cleared due to timeout.
     fn check_success_timeout(&mut self) {
         if let Some(timer) = self.success_timer {
             if timer.elapsed() > Duration::from_secs(5) {
@@ -497,7 +432,6 @@ impl UpdateStaff {
         }
     }
 
-    /// Checks if the error message should be cleared due to timeout.
     fn check_error_timeout(&mut self) {
         if let Some(timer) = self.error_timer {
             if timer.elapsed() > Duration::from_secs(5) {
@@ -506,7 +440,6 @@ impl UpdateStaff {
         }
     }
 
-    /// Checks both error and success message timeouts.
     fn check_timeouts(&mut self) {
         self.check_error_timeout();
         self.check_success_timeout();
@@ -520,30 +453,13 @@ impl Default for UpdateStaff {
 }
 
 impl Component for UpdateStaff {
-    /// Handles user input events for the `UpdateStaff` component.
-    ///
-    /// # Arguments
-    ///
-    /// * `event` - The key event to be handled.
-    ///
-    /// # Returns
-    ///
-    /// Returns `Result<Option<SelectedApp>>` indicating the outcome of the input handling:
-    ///
-    /// * `Ok(Some(SelectedApp::None))` if the component should switch back to the main app.
-    /// * `Ok(None)` if the component should continue processing input.
-    /// * `Err(_)` if an error occurred during input handling.
     fn handle_input(&mut self, event: KeyEvent) -> Result<Option<SelectedApp>> {
         match self.handle_input(event)? {
             Some(_) => Ok(Some(crate::app::SelectedApp::None)),
             None => Ok(None),
         }
     }
-    /// Renders the `UpdateStaff` component onto the given frame.
-    ///
-    /// # Arguments
-    ///
-    /// * `frame` - The frame to render the component onto.
+
     fn render(&self, frame: &mut Frame) {
         let area = frame.area();
         frame.render_widget(
@@ -556,7 +472,6 @@ impl Component for UpdateStaff {
             UpdateState::EditingStaff => self.render_staff_editing(frame, area),
         }
 
-        // Render confirmation dialog if needed
         if self.show_confirmation {
             self.render_confirmation_dialog(frame, area);
         }
@@ -564,22 +479,20 @@ impl Component for UpdateStaff {
 }
 
 impl UpdateStaff {
-    /// Renders the staff selection screen with table of staff.
     fn render_staff_selection(&self, frame: &mut Frame, area: Rect) {
         let main_layout = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(3), // Header
-                Constraint::Length(3), // Search input
-                Constraint::Length(3), // Staff ID Input
-                Constraint::Min(10),   // Staff selection table
-                Constraint::Length(1), // Error/Success message
-                Constraint::Length(2), // Help text
+                Constraint::Length(3),
+                Constraint::Length(3),
+                Constraint::Length(3),
+                Constraint::Min(10),
+                Constraint::Length(1),
+                Constraint::Length(2),
             ])
             .margin(1)
             .split(area);
 
-        // Header
         let header_block = Block::default()
             .borders(Borders::BOTTOM)
             .border_style(Style::default().fg(Color::Rgb(75, 75, 120)))
@@ -596,7 +509,6 @@ impl UpdateStaff {
             .alignment(Alignment::Center);
         frame.render_widget(title, main_layout[0]);
 
-        // Search input field
         let search_block = Block::default()
             .borders(Borders::ALL)
             .border_type(BorderType::Rounded)
@@ -607,7 +519,7 @@ impl UpdateStaff {
                     .add_modifier(Modifier::BOLD),
             ))
             .border_style(if self.is_searching {
-                Style::default().fg(Color::Rgb(250, 250, 110)) // Yellow when active
+                Style::default().fg(Color::Rgb(250, 250, 110))
             } else {
                 Style::default().fg(Color::Rgb(140, 140, 200))
             })
@@ -622,7 +534,6 @@ impl UpdateStaff {
             .block(search_block);
         frame.render_widget(search_paragraph, main_layout[1]);
 
-        // ID input field
         let id_input_block = Block::default()
             .borders(Borders::ALL)
             .border_type(BorderType::Rounded)
@@ -633,7 +544,7 @@ impl UpdateStaff {
                     .add_modifier(Modifier::BOLD),
             ))
             .border_style(if !self.is_searching {
-                Style::default().fg(Color::Rgb(250, 250, 110)) // Yellow when active
+                Style::default().fg(Color::Rgb(250, 250, 110))
             } else {
                 Style::default().fg(Color::Rgb(140, 140, 200))
             })
@@ -648,7 +559,6 @@ impl UpdateStaff {
             .block(id_input_block);
         frame.render_widget(id_input_paragraph, main_layout[2]);
 
-        // Staff selection table
         if self.filtered_staff.is_empty() {
             let no_staff = Paragraph::new(if self.search_input.is_empty() {
                 "No staff found in database"
@@ -712,7 +622,6 @@ impl UpdateStaff {
             frame.render_stateful_widget(staff_table, main_layout[3], &mut table_state_copy);
         }
 
-        // Error or success message
         if let Some(error) = &self.error_message {
             let error_paragraph = Paragraph::new(error.as_str())
                 .style(
@@ -733,7 +642,6 @@ impl UpdateStaff {
             frame.render_widget(success_paragraph, main_layout[4]);
         }
 
-        // Help text
         let help_text = if self.is_searching {
             "Type to search | ↓: To results | Esc: Cancel search"
         } else {
@@ -746,21 +654,19 @@ impl UpdateStaff {
         frame.render_widget(help_paragraph, main_layout[5]);
     }
 
-    /// Renders the staff editing screen with data table and input field.
     fn render_staff_editing(&self, frame: &mut Frame, area: Rect) {
         let main_layout = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(3), // Header
-                Constraint::Min(10),   // Table
-                Constraint::Length(3), // Input field
-                Constraint::Length(1), // Error/Success message
-                Constraint::Length(2), // Help text
+                Constraint::Length(3),
+                Constraint::Min(10),
+                Constraint::Length(3),
+                Constraint::Length(1),
+                Constraint::Length(2),
             ])
             .margin(1)
             .split(area);
 
-        // Header
         let header_block = Block::default()
             .borders(Borders::BOTTOM)
             .border_style(Style::default().fg(Color::Rgb(75, 75, 120)))
@@ -783,7 +689,6 @@ impl UpdateStaff {
             .alignment(Alignment::Center);
         frame.render_widget(title, main_layout[0]);
 
-        // Staff data table
         let id_str = self.staff.id.to_string();
         let role_str = match self.staff.role {
             StaffRole::Doctor => "Doctor",
@@ -853,7 +758,6 @@ impl UpdateStaff {
         let mut edit_table_state_copy = self.edit_table_state.clone();
         frame.render_stateful_widget(table, main_layout[1], &mut edit_table_state_copy);
 
-        // Input field for editing
         let input_label = match self.selected_field {
             Some(ID_INPUT) => "ID",
             Some(NAME_INPUT) => "Name",
@@ -873,7 +777,7 @@ impl UpdateStaff {
                 input_label
             ))
             .border_style(if self.editing {
-                Style::default().fg(Color::Rgb(140, 219, 140)) // Green when editing
+                Style::default().fg(Color::Rgb(140, 219, 140))
             } else {
                 Style::default().fg(Color::Rgb(140, 140, 200))
             })
@@ -888,7 +792,6 @@ impl UpdateStaff {
             .block(input_block);
         frame.render_widget(input_paragraph, main_layout[2]);
 
-        // Error or success message
         if let Some(error) = &self.error_message {
             let error_paragraph = Paragraph::new(error.as_str())
                 .style(
@@ -909,7 +812,6 @@ impl UpdateStaff {
             frame.render_widget(success_paragraph, main_layout[3]);
         }
 
-        // Help text
         let help_text = if self.editing {
             "Enter: Save Changes | Esc: Cancel Editing"
         } else {
@@ -922,7 +824,6 @@ impl UpdateStaff {
         frame.render_widget(help_paragraph, main_layout[4]);
     }
 
-    /// Renders the confirmation dialog for actions like save.
     fn render_confirmation_dialog(&self, frame: &mut Frame, area: Rect) {
         let dialog_width = 50;
         let dialog_height = 8;
@@ -933,7 +834,6 @@ impl UpdateStaff {
             dialog_height,
         );
 
-        // Clear just the dialog area
         frame.render_widget(Clear, dialog_area);
 
         let dialog_block = Block::default()
@@ -957,7 +857,7 @@ impl UpdateStaff {
             .constraints([Constraint::Length(2), Constraint::Length(2)])
             .split(inner_area);
 
-        let message = Paragraph::new(self.confirmation_message.as_str()) // Use the message
+        let message = Paragraph::new(self.confirmation_message.as_str())
             .style(Style::default().fg(Color::Rgb(220, 220, 240)))
             .add_modifier(Modifier::BOLD)
             .alignment(Alignment::Center);
