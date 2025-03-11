@@ -7,9 +7,13 @@ use time::{format_description, Date};
 
 const DB_NAME: &str = "rustoria.db";
 
-pub fn init_db() -> Result<()> {
+fn get_connection() -> Result<Connection> {
     let db_path = Path::new(DB_NAME);
-    let conn = Connection::open(db_path)?;
+    Connection::open(db_path).context("Failed to open database connection")
+}
+
+pub fn init_db() -> Result<()> {
+    let conn = get_connection()?;
 
     let schema = include_str!("schema.sql");
 
@@ -70,6 +74,7 @@ pub fn get_username(user_id: i64) -> Result<String> {
 
     Ok(username)
 }
+
 pub fn create_patient(patient: &Patient) -> Result<()> {
     let conn = Connection::open(DB_NAME)?;
     conn.execute(
