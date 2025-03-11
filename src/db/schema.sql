@@ -18,6 +18,15 @@ CREATE TABLE IF NOT EXISTS patients (
    current_medications TEXT 
 );
 
+CREATE TABLE IF NOT EXISTS staff (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    role TEXT NOT NULL,
+    phone_number TEXT NOT NULL,
+    email TEXT NOT NULL,
+    address TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS shifts (
     id INTEGER PRIMARY KEY AUTOINCREMENT, 
     staff_id INTEGER NOT NULL, 
