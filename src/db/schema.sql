@@ -23,7 +23,7 @@ CREATE TABLE IF NOT EXISTS staff (
     name TEXT NOT NULL,
     role TEXT NOT NULL,
     phone_number TEXT NOT NULL,
-    email TEXT NOT NULL,
+    email TEXT,
     address TEXT NOT NULL
 );
 
@@ -32,7 +32,7 @@ CREATE TABLE IF NOT EXISTS shifts (
     staff_id INTEGER NOT NULL, 
     date TEXT NOT NULL,
     shift TEXT NOT NULL, 
-    FOREIGN KEY (staff_id) REFERENCES staff(id) 
+    FOREIGN KEY (staff_id) REFERENCES staff(id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS medical_records (
@@ -42,7 +42,7 @@ CREATE TABLE IF NOT EXISTS medical_records (
     nurse_notes TEXT, 
     diagnosis TEXT NOT NULL,
     prescription TEXT,
-    FOREIGN KEY (patient_id) REFERENCES patients(id) 
+    FOREIGN KEY (patient_id) REFERENCES patients(id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS invoices (
@@ -51,5 +51,5 @@ CREATE TABLE IF NOT EXISTS invoices (
     item TEXT NOT NULL,
     quantity INTEGER NOT NULL,
     cost REAL NOT NULL,
-    FOREIGN KEY (patient_id) REFERENCES patients(id)
+    FOREIGN KEY (patient_id) REFERENCES patients(id) ON DELETE CASCADE
 );
