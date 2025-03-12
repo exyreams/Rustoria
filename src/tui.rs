@@ -33,7 +33,7 @@ impl Tui {
         crossterm::execute!(io::stdout(), EnterAlternateScreen, EnableMouseCapture)?;
         self.terminal.hide_cursor()?;
         self.terminal.clear()?;
-        self.set_min_size(95, 35)?;
+        self.set_min_size(120, 35)?;
         Ok(())
     }
 
