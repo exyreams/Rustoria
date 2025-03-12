@@ -417,7 +417,7 @@ impl StoreRecord {
             .style(Style::default().bg(Color::Rgb(16, 16, 28)));
         frame.render_widget(header, layout[0]);
 
-        let title = Paragraph::new("📝 SELECT PATIENT")
+        let title = Paragraph::new("📝 SELECT PATIENT TO ADD/STORE RECORDS")
             .style(
                 Style::default()
                     .fg(Color::Rgb(230, 230, 250))
