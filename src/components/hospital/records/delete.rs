@@ -416,7 +416,7 @@ impl Component for DeleteRecord {
 
         let selected_style = Style::default()
             .bg(Color::Rgb(45, 45, 60))
-            .fg(Color::Rgb(250, 250, 250))
+            .fg(Color::Rgb(250, 250, 110))
             .add_modifier(Modifier::BOLD);
         let normal_style = Style::default()
             .bg(Color::Rgb(26, 26, 36))
