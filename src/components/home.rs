@@ -24,34 +24,36 @@ pub struct Home {
 impl Home {
     pub fn new() -> Self {
         let features = vec![
-            "Billing & Finance Management",
-            "Medical Records Management",
+            "Billing & Finance",
+            "Medical Records",
             "Patient Management",
-            "Hospital Analytics",
             "Staff Management",
         ];
 
         let submenu_options = vec![
-            vec!["Create Bill/Invoice", "View Invoices", "Update Invoice"],
             vec![
-                "Store Record",
-                "Retrieve Records",
-                "Update Record",
-                "Delete Record",
+                "Create Bill/Invoice",
+                "View Bill/Invoices",
+                "Update Bill/Invoice",
             ],
             vec![
-                "Add Patient",
-                "List Patients",
-                "Update Patient",
+                "Add/Store Medical Record",
+                "Retrieve/List Medical Records",
+                "Update Medical Record",
+                "Delete Medical Record",
+            ],
+            vec![
+                "Add New Patient",
+                "List All Patients",
+                "Update Patient Details",
                 "Delete Patient",
             ],
-            vec!["Generate Report", "Export Reports"],
             vec![
                 "Add New Staff",
-                "Assign Shift",
+                "Assign/View Staff Shift",
                 "Delete Staff",
-                "List Staffs",
-                "Update Staffs",
+                "List All Staffs",
+                "Update Staff Details",
             ],
         ];
 
@@ -163,14 +165,8 @@ impl Home {
                                 3 => SelectedApp::PatientDelete,
                                 _ => SelectedApp::Hospital,
                             },
-                            // Analytics
-                            3 => match submenu_idx {
-                                // 0 => SelectedApp::ReportsGenerate,   // Generate Report
-                                // 1 => SelectedApp::ReportsExport,     // Export Reports
-                                _ => SelectedApp::Hospital,
-                            },
 
-                            4 => match submenu_idx {
+                            3 => match submenu_idx {
                                 0 => SelectedApp::StaffAdd,
                                 1 => SelectedApp::StaffAssign,
                                 2 => SelectedApp::StaffDelete,
@@ -343,11 +339,9 @@ impl Component for Home {
 
                 let icon = match idx {
                     0 => "💰",
-                    1 => "📦",
-                    2 => "📋",
-                    3 => "👤",
-                    4 => "📊",
-                    5 => "👥",
+                    1 => "📋",
+                    2 => "👤",
+                    3 => "👥",
                     _ => "•",
                 };
 
