@@ -57,27 +57,27 @@ Use **`root`** as username/password (default credentials) or click "Create Accou
 
 - **Registration/Login:**
 
- https://github.com/user-attachments/assets/9859304f-ef57-4fc2-8581-8c687389a07e
+ https://github.com/user-attachments/assets/7b0e1c9a-40b6-48a7-bb66-1efe8d8287bc
 
 - **Loading Mockdata to database:**
 
- https://github.com/user-attachments/assets/f291f094-9440-4a11-a188-3205d0158550
+ https://github.com/user-attachments/assets/cf5d30ab-4e25-4dea-8b7f-0946aa361854
 
 - **Biling & Finance Demo:**
 
-https://github.com/user-attachments/assets/87134b9a-9854-4333-b760-8325cc00f84f
+https://github.com/user-attachments/assets/7a3234b0-794c-4951-8407-7a347ad2482f
 
 - **Medical Records Management:**
 
-https://github.com/user-attachments/assets/75c7ec9e-92e2-4396-b35f-c0f2560548ef
+https://github.com/user-attachments/assets/0ab8dcea-8d05-4ab7-992c-3f82ba7c95a9
 
 - **Patient Management:**
 
-https://github.com/user-attachments/assets/7ef027bb-b805-4c51-b671-e709d335bc71
+https://github.com/user-attachments/assets/ece6bb80-4cf9-4b5f-bc99-465c77a11ad4
 
 - **Staff management:**
 
-https://github.com/user-attachments/assets/13400a3a-c2dd-40d4-b827-57a186ef39c8
+https://github.com/user-attachments/assets/d0d82719-26f0-4156-83d3-8fff1a70cbb2
 
 
 ## 🏗️ Project Structure
